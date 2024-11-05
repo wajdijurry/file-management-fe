@@ -1,0 +1,24 @@
+.red-icon {
+    color: red !important; /* Use !important to override any other styles */
+}
+
+.yellow-icon {
+    color: yellow !important;
+}
+
+.green-icon {
+    color: green !important;
+}
+
+.orange-icon {
+    color: orange !important;
+}
+
+.blue-icon {
+    color: darkcyan !important;
+}
+
+#pdf-canvas {
+    border: 1px solid #ccc;
+    cursor: crosshair;
+}

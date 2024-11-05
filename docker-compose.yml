@@ -1,0 +1,13 @@
+version: '3.0'
+
+services:
+  frontend:
+    image: "file-management-fe:1.0"
+    ports:
+      - "8082:80"
+    volumes:
+      - .:/app  # Optional: Mount the current directory to the container for live updates
+      - .:/usr/share/nginx/html
+      - /app/node_modules
+    environment:
+      - NODE_ENV=production  # Set environment variables if needed
