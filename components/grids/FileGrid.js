@@ -9,6 +9,10 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
     store: 'FileManagement.components.stores.FileGridStore',
 
+    currentFolder: null,
+    currentFolderPath: [], // Store the folder path segments
+    userId: null, // Store the user ID to represent the root directory
+
     draggable: {
         onMouseUp: function() {
             FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
@@ -221,10 +225,16 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 handler: function () {
                     Ext.Msg.prompt('New Folder', 'Enter folder name:', function (btn, folderName) {
                         if (btn === 'ok' && folderName) {
+                            const parentFolderId = this.up('grid').currentFolderId || null; // Get the current folder ID or set to null for root
+                            console.log(parentFolderId);
+
                             Ext.Ajax.request({
                                 url: 'http://localhost:5000/api/files/create-folder',
                                 method: 'POST',
-                                jsonData: { name: folderName },
+                                jsonData: {
+                                    name: folderName,
+                                    parentId: parentFolderId
+                                },
                                 success: function(response) {
                                     Ext.Msg.alert('Success', 'Folder created successfully.');
                                     const store = this.up('grid').getStore();
@@ -311,6 +321,14 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     }
                 },
                 {
+                    text: 'Rename',
+                    iconCls: 'fa fa-pen', // Add the custom class here
+                    itemId: 'renameMenuItem',
+                    handler: function () {
+                        me.onRenameFile(); // Call the new delete function
+                    }
+                },
+                {
                     text: 'Actions',
                     itemId: 'actionsMenu',
                     menu: {
@@ -330,26 +348,29 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                         // Show a prompt dialog to ask for folder name
                                         Ext.Msg.prompt('Decompress Folder', 'Enter the name of the folder to decompress into:', function(btn, folderName) {
                                             if (btn === 'ok' && folderName) {
+                                                console.log(this.currentFolder);
                                                 // Proceed with decompress request using the specified folder name
                                                 Ext.Ajax.request({
                                                     url: 'http://localhost:5000/api/files/decompress',
                                                     method: 'POST',
                                                     jsonData: {
                                                         filePath: zipFile.get('path'),
-                                                        targetFolder: folderName
+                                                        targetFolder: this.currentFolder ? this.currentFolder + '/' + folderName : folderName
                                                     },
                                                     success: function(response) {
                                                         Ext.Msg.alert('Success', 'File decompressed successfully.');
                                                         grid.getStore().reload();
                                                     },
                                                     failure: function(response) {
-                                                        Ext.Msg.alert('Error', 'Failed to decompress file');
+                                                        let responseJSON = JSON.parse(response.responseText);
+                                                        Ext.Msg.alert('Error', 'Failed to decompress file: ' + responseJSON.error);
                                                     }
                                                 });
                                             }
-                                        });
+                                        }, this);
                                     }
                                 },
+                                scope: this
                             }
                         ]
                     },
@@ -370,12 +391,36 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     const actionsVisible = actionsMenu.menu.items.items.filter(item => !item.hidden);
                     actionsMenu.setHidden(!actionsVisible.length);
 
+                    const renameMenuItem = menu.down('#renameMenuItem');
+                    renameMenuItem.setDisabled(selection.length !== 1);
+
                     return true;
                 },
             }
         });
 
+        // Add the bottom toolbar (bbar) to display the breadcrumb navigation
+        Ext.apply(me, {
+            bbar: {
+                items: [
+                    {
+                        xtype: 'tbtext',
+                        text: 'Path: '
+                    },
+                    {
+                        xtype: 'toolbar',
+                        itemId: 'breadcrumbToolbar',
+                        border: 0,
+                        items: []
+                    }
+                ]
+            }
+        });
+
         me.callParent(arguments);
+
+        // Initialize breadcrumb path to root on load
+        this.updateBreadcrumb([]);
 
         me.on('afterrender', function () {
             me.loadFiles();
@@ -401,6 +446,56 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         me.on('itemdblclick', function (view, record) {
             me.onFileDoubleClick(record);
         });
+
+        me.updateBreadcrumb([]);
+    },
+
+    // Method to update the breadcrumb based on the current folder path
+    updateBreadcrumb: function (pathSegments) {
+        const breadcrumbToolbar = this.down('#breadcrumbToolbar');
+        breadcrumbToolbar.removeAll();
+
+        breadcrumbToolbar.add({
+            xtype: 'button',
+            text: 'Root',
+            handler: () => this.navigateToRoot()
+        });
+
+        if (pathSegments.length > 0) {
+            breadcrumbToolbar.add({
+                xtype: 'tbseparator'
+            });
+        }
+
+        pathSegments.forEach((segment, index) => {
+            breadcrumbToolbar.add({
+                xtype: 'button',
+                text: segment.name,
+                handler: () => this.navigateToPathIndex(index)
+            });
+
+            if (index < pathSegments.length - 1) {
+                breadcrumbToolbar.add({
+                    xtype: 'tbseparator'
+                });
+            }
+        });
+    },
+
+    // Method to navigate back to the root directory
+    navigateToRoot: function () {
+        this.currentFolderPath = [];
+        this.loadFolderContents(null, this.userId);
+        this.updateBreadcrumb([]);
+    },
+
+    // Method to navigate to a specific folder in the breadcrumb path
+    navigateToPathIndex: function (index) {
+        this.currentFolderPath = this.currentFolderPath.slice(0, index + 1);
+        const newPath = this.currentFolderPath;
+        const targetFolder = newPath[newPath.length - 1] || { id: null, name: '' };
+        this.loadFolderContents(targetFolder.name, targetFolder.id);
+        this.updateBreadcrumb(newPath);
     },
 
     // Optionally, you can add methods for additional functionality
@@ -451,6 +546,38 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         }
     },
 
+    onRenameFile: function () {
+        var me = this;
+        var selection = me.getSelectionModel().getSelection()[0];
+
+        if (selection) {
+            Ext.Msg.prompt('Rename', 'Enter new name:', function (btn, newName) {
+                if (btn === 'ok' && newName) {
+                    Ext.Ajax.request({
+                        url: 'http://localhost:5000/api/files/rename',
+                        method: 'POST',
+                        jsonData: {
+                            itemId: selection.get('_id'),
+                            newName: newName,
+                            isFolder: selection.get('isFolder')
+                        },
+                        success: function(response) {
+                            Ext.Msg.alert('Success', 'File/Folder renamed successfully.');
+                            const store = this.getStore();
+                            if (store) {
+                                store.reload();
+                            }
+                        },
+                        failure: function(response) {
+                            Ext.Msg.alert('Error', 'Failed to rename file/folder');
+                        },
+                        scope: this // Preserve the context
+                    });
+                }
+            }, this)
+        }
+    },
+
     onFileDoubleClick: function (record) {
         var fileType = record.get('mimetype');
         var filePath = record.get('_id');
@@ -463,7 +590,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         } else if (fileType === 'application/pdf') {
             this.openPdfViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
         } else if (record.get('isFolder')) {
-            this.loadFolderContents(record.get('name'));
+            this.loadFolderContents(record.get('name'), record.get('_id'));
         } else {
             Ext.Msg.alert('Unsupported File Type', 'The selected file type is not supported for viewing.');
         }
@@ -725,62 +852,49 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     },
 
     // Function to load the contents of a folder
-    loadFolderContents: function(folderName) {
-        // Update the current folder path
-        this.currentFolder = this.currentFolder ? `${this.currentFolder}/${folderName}` : folderName;
+    loadFolderContents: function(folderName, folderId) {
+        console.log(this.currentFolderPath);
+        if (this.currentFolderPath.length) {
+            this.currentFolder = this.currentFolderPath.map(segment => segment.name).join('/');
+        } else {
+            this.currentFolder = folderName;
+        }
 
-        const store = this.getStore();
+        this.currentFolderId = folderId ?? null;
 
-        store.getProxy().setUrl(`http://localhost:5000/api/files?folder=${encodeURIComponent(folderName)}`);
-        store.load({
+        if (folderName) {
+            this.currentFolderPath.push({ name: folderName, id: folderId });
+        } else {
+            this.currentFolderPath = [];
+        }
+
+        this.updateBreadcrumb(this.currentFolderPath);
+
+        this.getStore().getProxy().setUrl(`http://localhost:5000/api/files?folder=${encodeURIComponent(this.currentFolderPath.map(f => f.name).join('/'))}`);
+        this.getStore().reload({
             callback: function(records, operation, success) {
-                // console.log(records);
-                // if (success) {
-                //     Ext.Msg.alert('Success', `Contents of folder "${folderName}" loaded.`);
-                // } else {
-                //     Ext.Msg.alert('Error', `Failed to load contents of folder "${folderName}".`);
-                // }
                 if (!success) {
                     Ext.Msg.alert('Error', `Failed to load contents of folder "${folderName}".`);
-                } else {
-                    // Enable the "Go Up" button as we're no longer in the root folder
-                    const goUpButton = Ext.ComponentQuery.query('#goUpButton')[0];
-                    if (goUpButton) {
-                        goUpButton.setDisabled(false);
-                    }
                 }
             }
         });
+
+        const goUpButton = this.down('#goUpButton');
+        if (goUpButton) {
+            goUpButton.setDisabled(this.currentFolderPath.length === 0);
+        }
     },
 
     // Navigate one level up in the folder hierarchy
     navigateUp: function() {
-        if (this.currentFolder) {
-            // Remove the last part of the current folder path
-            const pathSegments = this.currentFolder.split('/');
-            pathSegments.pop();
-            this.currentFolder = pathSegments.join('/');
-
-            const url = this.currentFolder
-                ? `http://localhost:5000/api/files?folder=${encodeURIComponent(this.currentFolder)}`
-                : 'http://localhost:5000/api/files';
-
-            this.getStore().getProxy().setUrl(url);
-            this.getStore().load({
-                callback: function(records, operation, success) {
-                    if (!success) {
-                        Ext.Msg.alert('Error', 'Failed to load folder contents');
-                    }
-                }
-            });
-
-            // Disable the "Go Up" button if we're back at the root
-            if (!this.currentFolder) {
-                this.down('#goUpButton').setDisabled(true);
-            }
+        if (this.currentFolderPath.length > 0) {
+            this.currentFolderPath.pop();
+            const folderId = this.currentFolderPath.length > 0 ? this.currentFolderPath[this.currentFolderPath.length - 1].id : null;
+            this.currentFolder = this.currentFolderPath.map(segment => segment.name).join('/') || '';
+            this.loadFolderContents(this.currentFolderPath.map(segment => segment.name).join('/'), folderId);
         } else {
             Ext.Msg.alert('Info', 'You are already in the root folder.');
         }
-    },
+    }
 
 });
