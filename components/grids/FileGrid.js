@@ -9,7 +9,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
     store: 'FileManagement.components.stores.FileGridStore',
 
-    currentFolder: null,
+    currentFolder: '',
     currentFolderPath: [], // Store the folder path segments
     userId: null, // Store the user ID to represent the root directory
 
@@ -453,6 +453,8 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     // Method to update the breadcrumb based on the current folder path
     updateBreadcrumb: function (pathSegments) {
         const breadcrumbToolbar = this.down('#breadcrumbToolbar');
+        if (!breadcrumbToolbar) return;
+
         breadcrumbToolbar.removeAll();
 
         breadcrumbToolbar.add({
@@ -489,12 +491,12 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         this.updateBreadcrumb([]);
     },
 
-    // Method to navigate to a specific folder in the breadcrumb path
     navigateToPathIndex: function (index) {
-        this.currentFolderPath = this.currentFolderPath.slice(0, index + 1);
-        const newPath = this.currentFolderPath;
+        const newPath = this.currentFolderPath.slice(0, index + 1);
+        this.currentFolderPath = newPath;
         const targetFolder = newPath[newPath.length - 1] || { id: null, name: '' };
-        this.loadFolderContents(targetFolder.name, targetFolder.id);
+        this.currentFolder = newPath.map(segment => segment.name).join('/') || '';
+        this.loadFolderContents(targetFolder.name, targetFolder.id, false);
         this.updateBreadcrumb(newPath);
     },
 
@@ -852,26 +854,24 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     },
 
     // Function to load the contents of a folder
-    loadFolderContents: function(folderName, folderId) {
-        console.log(this.currentFolderPath);
-        if (this.currentFolderPath.length) {
-            this.currentFolder = this.currentFolderPath.map(segment => segment.name).join('/');
-        } else {
-            this.currentFolder = folderName;
+    loadFolderContents: function(folderName, folderId, pushToPath = true) {
+        // Only push the folder to currentFolderPath if explicitly allowed
+        if (folderName !== null && folderId !== this.currentFolderId && pushToPath) {
+            this.currentFolderPath.push({ name: folderName, id: folderId });
         }
 
+        this.currentFolder = this.currentFolderPath.map(segment => segment.name).join('/') || '';
         this.currentFolderId = folderId ?? null;
 
-        if (folderName) {
-            this.currentFolderPath.push({ name: folderName, id: folderId });
-        } else {
-            this.currentFolderPath = [];
-        }
+        console.log(this.currentFolderId);
 
         this.updateBreadcrumb(this.currentFolderPath);
 
-        this.getStore().getProxy().setUrl(`http://localhost:5000/api/files?folder=${encodeURIComponent(this.currentFolderPath.map(f => f.name).join('/'))}`);
-        this.getStore().reload({
+        const store = this.getStore();
+        if (!store) return;
+
+        store.getProxy().setUrl(`http://localhost:5000/api/files?parent_id=${this.currentFolderId}`);
+        store.load({
             callback: function(records, operation, success) {
                 if (!success) {
                     Ext.Msg.alert('Error', `Failed to load contents of folder "${folderName}".`);
@@ -885,13 +885,20 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         }
     },
 
-    // Navigate one level up in the folder hierarchy
     navigateUp: function() {
-        if (this.currentFolderPath.length > 0) {
+        if (this.currentFolderPath.length > 1) {
+            // Remove the last folder from the current folder path
             this.currentFolderPath.pop();
+
+            // Update `currentFolder` based on the new path
             const folderId = this.currentFolderPath.length > 0 ? this.currentFolderPath[this.currentFolderPath.length - 1].id : null;
             this.currentFolder = this.currentFolderPath.map(segment => segment.name).join('/') || '';
-            this.loadFolderContents(this.currentFolderPath.map(segment => segment.name).join('/'), folderId);
+
+            // Load the contents of the parent folder
+            this.loadFolderContents(null, folderId);
+        } else if (this.currentFolderPath.length === 1) {
+            // If only one folder remains, navigate to root
+            this.navigateToRoot();
         } else {
             Ext.Msg.alert('Info', 'You are already in the root folder.');
         }

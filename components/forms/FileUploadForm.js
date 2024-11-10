@@ -72,7 +72,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
                     // Access the currentFolder value from FileGrid
                     const fileGrid = Ext.ComponentQuery.query('filegrid')[0];
                     if (fileGrid) {
-                        formData.append('folder', fileGrid.currentFolder || ''); // Set folder in FormData
+                        formData.append('folder_id', fileGrid.currentFolderId || ''); // Set folder in FormData
                     }
 
                     // Append all selected files to the FormData
