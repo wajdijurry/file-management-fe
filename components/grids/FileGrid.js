@@ -94,6 +94,14 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                             break;
                         case 'application/zip':
                             iconClass += ' fa-file-archive yellow-icon';
+                            break;
+                        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                        case 'application/msword':
+                            iconClass += ' fa-light fa-file-word blue-icon';
+                            break;
+                        case 'application/vnd.ms-powerpoint':
+                        case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+                            iconClass = 'fa-duotone fa-solid fa-file-ppt fa-xl';
                         // Add more cases as needed
                         default:
                             iconClass += ' icon-default'; // Default icon class
@@ -591,6 +599,11 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             this.openZipViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
         } else if (fileType === 'application/pdf') {
             this.openPdfViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
+        } else if (fileType === 'application/msword' ||
+            fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+            fileType === 'application/vnd.ms-excel' ||
+            fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+            this.openOfficeViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
         } else if (record.get('isFolder')) {
             this.loadFolderContents(record.get('name'), record.get('_id'));
         } else {
@@ -820,37 +833,82 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     },
 
     openPdfViewer: function (fileUrl, fileName) {
-        // Validate file URL
-        if (!fileUrl) {
-            console.error('Invalid file URL');
-            return;
-        }
+        const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
 
-        // Create the PDF viewer panel using the custom Ext.ux.PDFViewer component
-        const pdfViewerPanel = Ext.create('FileManagement.components.viewers.PDFViewer', {
-            src: fileUrl,
-            title: fileName || 'PDF Viewer',
-            showFileName: true,
-            loadingText: 'I am receiving the file'
-        });
+        // Fetch the PDF file with the Authorization header
+        fetch(fileUrl, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        })
+            .then(function(response) {
+                if (!response.ok) {
+                    throw new Error('Failed to load PDF file');
+                }
+                return response.blob(); // Convert response to blob
+            })
+            .then(function(blob) {
+                const objectURL = URL.createObjectURL(blob); // Create a blob URL
 
-        // Create a window to display the PDF viewer
-        const pdfWindow = Ext.create('Ext.window.Window', {
-            title: 'PDF Viewer: ' + fileName,
+                // Create the PDF viewer panel using the custom Ext.ux.PDFViewer component
+                const pdfViewerPanel = Ext.create('FileManagement.components.viewers.PDFViewer', {
+                    src: objectURL,
+                    title: fileName || 'PDF Viewer',
+                    showFileName: true,
+                    loadingText: 'I am receiving the file'
+                });
+
+                // Create a window to display the PDF viewer
+                const pdfWindow = Ext.create('Ext.window.Window', {
+                    title: 'PDF Viewer: ' + fileName,
+                    modal: true,
+                    width: 800,
+                    height: 600,
+                    layout: 'fit',
+                    items: [pdfViewerPanel],
+                    listeners: {
+                        close: function () {
+                            pdfViewerPanel.destroy(); // Clean up the viewer panel on close
+                            URL.revokeObjectURL(objectURL); // Clean up the blob URL
+                        }
+                    }
+                });
+
+                // Show the window
+                pdfWindow.show();
+            })
+            .catch(function(error) {
+                Ext.Msg.alert('Error', error.message); // Handle errors
+            });
+    },
+
+    openOfficeViewer: async function (filePath, fileName) {
+        const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
+        // const viewerUrl = `https://docs.google.com/gview?url=${filePath}&embedded=true`;
+        const viewerUrl = `https://docs.google.com/gview?url=https://onlinetestcase.com/wp-content/uploads/2023/06/100-kb.xlsx&embedded=true`;
+
+        // Create a window to display the office document
+        const officeWindow = Ext.create('Ext.window.Window', {
+            title: 'Office Document Viewer: ' + fileName,
             modal: true,
             width: 800,
             height: 600,
             layout: 'fit',
-            items: [pdfViewerPanel],
+            items: [{
+                xtype: 'component',
+                autoEl: {
+                    tag: 'iframe',
+                    src: viewerUrl,
+                    style: 'width: 100%; height: 100%; border: none;'
+                }
+            }],
             listeners: {
                 close: function () {
-                    pdfViewerPanel.destroy();
+                    this.destroy(); // Clean up the window on close
                 }
             }
         });
 
         // Show the window
-        pdfWindow.show();
+        officeWindow.show();
     },
 
     // Function to load the contents of a folder
@@ -861,9 +919,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         }
 
         this.currentFolder = this.currentFolderPath.map(segment => segment.name).join('/') || '';
-        this.currentFolderId = folderId ?? null;
-
-        console.log(this.currentFolderId);
+        this.currentFolderId = folderId ?? '';
 
         this.updateBreadcrumb(this.currentFolderPath);
 

@@ -5,10 +5,10 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
     xtype: "fileGridStore",
     proxy: {
         type: 'ajax',
-        url: 'http://localhost:5000/api/files', // Update with your API endpoint to fetch files
+        url: 'http://localhost:5000/api/files?parent_id=', // API endpoint to fetch files
         reader: {
             type: 'json',
-            rootProperty: 'files' // Adjust according to your API response structure
+            rootProperty: 'files' // API response structure
         }
     },
 

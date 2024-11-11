@@ -1,61 +1,85 @@
 import re
-import os
 import requests
-from zipfile import ZipFile
-from urllib.parse import urljoin, urlparse
+import os
+from urllib.parse import urljoin
+from bs4 import BeautifulSoup
 
-# URL of the remote CSS file
-css_url = 'https://atugatran.github.io/FontAwesome6Pro/css/all.min.css'  # Replace with your CSS file URL
-zip_output = 'fonts.zip'
-base_font_dir = 'fonts'
+def download_fonts_from_css(css_url, output_dir="fonts"):
+    # Create output directory if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Fetch the CSS file
+    response = requests.get(css_url)
+    if response.status_code != 200:
+        print(f"Failed to fetch CSS file: {response.status_code}")
+        return
+    css_content = response.text
 
-# Regex for extracting font URLs (targets URLs containing 'webfonts')
-font_pattern = re.compile(r'url\(([^)]+)\)')
+    # Extract font URLs (ttf, woff, woff2)
+    font_urls = re.findall(r'url\(([^)]+\.(?:ttf|woff2?|eot|otf))\)', css_content)
+    
+    # Download each font file
+    for font_url in font_urls:
+        # Remove any quotes from the URL
+        font_url = font_url.strip('"').strip("'")
+        
+        # Handle relative URLs by converting them to absolute URLs
+        absolute_font_url = urljoin(css_url, font_url)
+        
+        # Get the font file name
+        font_name = os.path.basename(absolute_font_url)
+        
+        # Download the font file
+        try:
+            print(f"Downloading {font_name} from {absolute_font_url}...")
+            font_response = requests.get(absolute_font_url, stream=True)
+            if font_response.status_code == 200:
+                font_path = os.path.join(output_dir, font_name)
+                with open(font_path, 'wb') as font_file:
+                    for chunk in font_response.iter_content(chunk_size=8192):
+                        font_file.write(chunk)
+                print(f"Downloaded {font_name} successfully.")
+            else:
+                print(f"Failed to download {font_name}: {font_response.status_code}")
+        except Exception as e:
+            print(f"Error downloading {font_name}: {str(e)}")
 
-# Download and read the CSS file
-try:
-    css_response = requests.get(css_url)
-    css_response.raise_for_status()
-    css_content = css_response.text
-except Exception as e:
-    print(f"Failed to download CSS file: {e}")
-    exit()
+def download_webfonts_folder(base_url, output_dir="fonts"):
+    # Create output directory if it doesn't exist
+    if not os.path.exists(output_dir):
+        os.makedirs(output_dir)
+    
+    # Fetch the base URL
+    response = requests.get(base_url)
+    if response.status_code != 200:
+        print(f"Failed to fetch base URL: {response.status_code}")
+        return
+    soup = BeautifulSoup(response.text, 'html.parser')
 
-# Find all URLs and filter for webfonts only
-urls = font_pattern.findall(css_content)
-font_urls = [url.strip('"').strip("'") for url in urls if 'webfonts' in url and not url.startswith("data:")]
+    # Find all links ending with font extensions
+    font_links = soup.find_all('a', href=re.compile(r'webfonts/.*\.(?:ttf|woff2?|eot|otf)$'))
+    
+    # Download each font file in the webfonts folder
+    for link in font_links:
+        font_url = urljoin(base_url, link['href'])
+        font_name = os.path.basename(font_url)
+        try:
+            print(f"Downloading {font_name} from {font_url}...")
+            font_response = requests.get(font_url, stream=True)
+            if font_response.status_code == 200:
+                font_path = os.path.join(output_dir, font_name)
+                with open(font_path, 'wb') as font_file:
+                    for chunk in font_response.iter_content(chunk_size=8192):
+                        font_file.write(chunk)
+                print(f"Downloaded {font_name} successfully.")
+            else:
+                print(f"Failed to download {font_name}: {font_response.status_code}")
+        except Exception as e:
+            print(f"Error downloading {font_name}: {str(e)}")
 
-# Download and save fonts with their folder structure
-for font_url in font_urls:
-    # Resolve relative URLs with the base URL
-    full_font_url = urljoin(css_url, font_url)
-    parsed_url = urlparse(font_url)
-    file_path = os.path.join(base_font_dir, parsed_url.path.lstrip('/'))
-
-    # Create necessary directories
-    os.makedirs(os.path.dirname(file_path), exist_ok=True)
-
-    try:
-        # Download the font
-        font_response = requests.get(full_font_url)
-        font_response.raise_for_status()
-
-        # Save the font with its original name in its directory
-        with open(file_path, 'wb') as font_file:
-            font_file.write(font_response.content)
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
-            print(f"Skipping {full_font_url}: File not found (404)")
-        else:
-            print(f"Failed to download {full_font_url}: {e}")
-    except Exception as e:
-        print(f"Failed to download {full_font_url}: {e}")
-
-# Zip the fonts folder with its structure
-with ZipFile(zip_output, 'w') as zipf:
-    for foldername, _, filenames in os.walk(base_font_dir):
-        for filename in filenames:
-            filepath = os.path.join(foldername, filename)
-            zipf.write(filepath, os.path.relpath(filepath, base_font_dir))
-
-print(f"Fonts have been extracted with original structure and zipped as {zip_output}")
+if __name__ == "__main__":
+    css_url = input("Enter the CSS file URL: ")
+    base_url = input("Enter the base URL to download webfonts folder: ")
+    download_fonts_from_css(css_url)
+    download_webfonts_folder(base_url)
