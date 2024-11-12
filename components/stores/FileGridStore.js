@@ -14,9 +14,7 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
 
     listeners: {
         load: function(store, records, successful, operation) {
-            if (successful) {
-                console.log('Files loaded:', records);
-            } else {
+            if (!successful) {
                 console.error('Failed to load files:', operation.getError());
             }
         }

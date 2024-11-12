@@ -13,8 +13,8 @@ Ext.application({
 
     requires: [
         'Ext.container.Viewport',
-        'FileManagement.components.grids.FileGrid',
         'FileManagement.components.stores.FileGridStore',
+        'FileManagement.components.grids.FileGrid',
         'FileManagement.components.viewers.PDFViewer',
         'FileManagement.components.utils.PanelUtils',
         'FileManagement.components.navigation.NavigationPanel',
@@ -29,17 +29,6 @@ Ext.application({
         const isAuthenticated = !!localStorage.getItem('token');
 
         const loadMainView = () => {
-            // Create instances of components
-            const fileGridStore = Ext.create('FileManagement.components.stores.FileGridStore');
-
-            const fileGrid = Ext.create('FileManagement.components.grids.FileGrid', {
-                xtype: 'filegrid',
-                store: fileGridStore,
-                x: 210,
-                y: 250,
-                title: 'File Grid Panel'
-            });
-
             // Create the viewport with navigation and main panels
             Ext.create('Ext.container.Viewport', {
                 layout: 'border',
@@ -59,7 +48,7 @@ Ext.application({
                         xtype: 'container',
                         layout: 'absolute',
                         id: 'mainPanelRegion',
-                        items: [fileGrid],
+                        items: [],
                         listeners: {
                             afterrender: function (container) {
 
@@ -69,10 +58,11 @@ Ext.application({
                                 // Alt+Q toggling functionality
                                 Ext.getBody().on('keydown', function (e) {
                                     if (e.altKey && e.getKey() === Ext.EventObject.Q) {
-                                        console.log("Alt+Q pressed");
+                                        console.log("Switch panels view");
 
                                         // Get all visible panels in mainPanelRegion, excluding the navigation panel
-                                        const panels = container.items.filter(panel => panel.isVisible() && panel.itemId !== 'navigationPanel');
+                                        // const panels = container.items.filter(panel => panel.isVisible() && panel.itemId !== 'navigationPanel');
+                                        const panels = container.items.getRange().filter(panel => panel.isVisible() && panel.itemId !== 'navigationPanel');
 
                                         if (panels.length === 0) return;
 

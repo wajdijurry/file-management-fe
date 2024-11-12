@@ -47,19 +47,17 @@ Ext.define('FileManagement.components.navigation.NavigationPanel', {
             return;
         }
 
-        // Convert `mainPanelRegion.items` to an array using `getRange()`
+        new Ext.util.DelayedTask(function(){
+            const visiblePanels = mainPanelRegion.items.getRange().filter(panel => panel.isVisible());
 
-        const visiblePanels = mainPanelRegion.items.getRange().filter(panel => panel.isVisible());
+            // Map over the array of visible panels to create data objects
+            const data = visiblePanels.map(panel => ({
+                id: panel.getId(),
+                title: panel.title || 'Untitled Panel',
+                panelRef: panel
+            }));
 
-        console.log(visiblePanels);
-
-        // Map over the array of visible panels to create data objects
-        const data = visiblePanels.map(panel => ({
-            id: panel.getId(),
-            title: panel.title || 'Untitled Panel',
-            panelRef: panel
-        }));
-
-        store.loadData(data);
+            store.loadData(data);
+        }).delay(100);
     }
 });

@@ -22,17 +22,38 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     resizable: {
         constrain: true, // Enable constraint within a specified element
         dynamic: true, // Updates size dynamically as resizing
-        // minHeight: 300,
-        // minWidth: 600,
+        minHeight: 300,
+        minWidth: 450,
     },
 
     listeners: {
         click: {
-            element: 'el', // could be 'body', or any other Ext.Elements
-                           // that are available from the component
+            element: 'el',
             fn: function () {
                 FileManagement.components.utils.PanelUtils.onClick(this);
             }
+        },
+        destroy: function(panel) {
+            // Safely close the upload panel if it exists and is visible
+            const uploadForm = Ext.ComponentQuery.query('fileuploadform')[0];
+            if (uploadForm && uploadForm.isVisible()) {
+                uploadForm.close(); // Close the upload form if visible
+            }
+
+            // Ensure the FileGrid's reference button in the toolbar is unpressed if it exists
+            if (panel.refBottomToolbarButton) {
+                panel.refBottomToolbarButton.setPressed(false);
+            }
+
+            // Remove all listeners associated with this panel to avoid lingering references
+            panel.un('selectionchange', panel.onSelectionChange, panel);
+            panel.un('itemcontextmenu', panel.onItemContextMenu, panel);
+            panel.un('itemdblclick', panel.onFileDoubleClick, panel);
+
+            // Perform any additional cleanup needed
+            FileManagement.components.utils.PanelUtils.destroy(panel);
+
+            console.log('FileGrid and associated elements cleaned up successfully.');
         }
     },
 
@@ -209,7 +230,10 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
                     if (!uploadForm) {
                         // Create the FileUploadForm if it doesn't exist
-                        uploadForm = Ext.create('FileManagement.components.forms.FileUploadForm');
+                        uploadForm = Ext.create('FileManagement.components.forms.FileUploadForm', {
+                            x: '50%',
+                            y: '50%'
+                        });
                         mainPanelRegion.add(uploadForm);
                     } else {
                         // Toggle visibility if it already exists
@@ -293,7 +317,8 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                 jsonData: {
                                     items: selectedItems,
                                     folder: grid.currentFolder,
-                                    zipFileName: zipFileName
+                                    zipFileName: zipFileName,
+                                    parentId: grid.currentFolderId
                                 },
                                 success: function(response) {
                                     Ext.Msg.alert('Success', 'Files compressed successfully.');
@@ -350,20 +375,19 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                     const grid = Ext.ComponentQuery.query('filegrid')[0];
                                     const selection = grid.getSelectionModel().getSelection();
                                     const zipFile = selection[0];
-                                    console.log(zipFile);
 
                                     if (zipFile && zipFile.get('mimetype') === 'application/zip') {
                                         // Show a prompt dialog to ask for folder name
                                         Ext.Msg.prompt('Decompress Folder', 'Enter the name of the folder to decompress into:', function(btn, folderName) {
                                             if (btn === 'ok' && folderName) {
-                                                console.log(this.currentFolder);
                                                 // Proceed with decompress request using the specified folder name
                                                 Ext.Ajax.request({
                                                     url: 'http://localhost:5000/api/files/decompress',
                                                     method: 'POST',
                                                     jsonData: {
                                                         filePath: zipFile.get('path'),
-                                                        targetFolder: this.currentFolder ? this.currentFolder + '/' + folderName : folderName
+                                                        targetFolder: this.currentFolder ? this.currentFolder + '/' + folderName : folderName,
+                                                        parentId: this.currentFolderId
                                                     },
                                                     success: function(response) {
                                                         Ext.Msg.alert('Success', 'File decompressed successfully.');
@@ -515,9 +539,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         // Load the store data
         me.getStore().load({
             callback: function (records, operation, success) {
-                if (success) {
-                    console.log('Files loaded successfully:', records);
-                } else {
+                if (!success) {
                     console.error('Failed to load files:', operation.getError());
                 }
             }
@@ -561,6 +583,8 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         var selection = me.getSelectionModel().getSelection()[0];
 
         if (selection) {
+            const currentName = selection.get('name'); // Get the current file name
+
             Ext.Msg.prompt('Rename', 'Enter new name:', function (btn, newName) {
                 if (btn === 'ok' && newName) {
                     Ext.Ajax.request({
@@ -584,7 +608,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                         scope: this // Preserve the context
                     });
                 }
-            }, this)
+            }, this, false, currentName)
         }
     },
 
@@ -602,10 +626,14 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         } else if (fileType === 'application/msword' ||
             fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
             fileType === 'application/vnd.ms-excel' ||
-            fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') {
+            fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
+            fileType === 'application/vnd.ms-powerpoint' ||
+            fileType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
             this.openOfficeViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
         } else if (record.get('isFolder')) {
             this.loadFolderContents(record.get('name'), record.get('_id'));
+        } else if (fileType === 'text/plain') {
+            this.openTextViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
         } else {
             Ext.Msg.alert('Unsupported File Type', 'The selected file type is not supported for viewing.');
         }
@@ -729,6 +757,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 layout: 'fit',
                 width: 400,
                 height: 300,
+                constrain: true, // Enable constraint
                 items: [{
                     xtype: 'gridpanel',
                     store: {
@@ -846,52 +875,81 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 return response.blob(); // Convert response to blob
             })
             .then(function(blob) {
+                // const objectURL = URL.createObjectURL(blob); // Create a blob URL
+                //
+                // // Create the PDF viewer panel using the custom Ext.ux.PDFViewer component
+                // const pdfViewerPanel = Ext.create('FileManagement.components.viewers.PDFViewer', {
+                //     src: objectURL,
+                //     title: fileName || 'PDF Viewer',
+                //     showFileName: true,
+                //     loadingText: 'I am receiving the file'
+                // });
+                //
+                // // Create a window to display the PDF viewer
+                // const pdfWindow = Ext.create('Ext.window.Window', {
+                //     title: 'PDF Viewer: ' + fileName,
+                //     modal: true,
+                //     width: 800,
+                //     height: 600,
+                //     layout: 'fit',
+                //     items: [pdfViewerPanel],
+                //     constraint: true,
+                //     listeners: {
+                //         close: function () {
+                //             pdfViewerPanel.destroy(); // Clean up the viewer panel on close
+                //             URL.revokeObjectURL(objectURL); // Clean up the blob URL
+                //         }
+                //     }
+                // });
+                //
+                // // Show the window
+                // pdfWindow.show();
+
                 const objectURL = URL.createObjectURL(blob); // Create a blob URL
 
-                // Create the PDF viewer panel using the custom Ext.ux.PDFViewer component
-                const pdfViewerPanel = Ext.create('FileManagement.components.viewers.PDFViewer', {
+                // Find the main panel region where you want to display the PDF viewer
+                const mainPanelRegion = Ext.getCmp('mainPanelRegion');
+
+                // Clear any previous instances of the PDF viewer to prevent duplicates
+                let existingPdfViewer = mainPanelRegion.down('pdfviewer');
+                if (existingPdfViewer) {
+                    existingPdfViewer.destroy(); // Remove the previous instance
+                }
+
+                // Create and add the PDFViewer component directly
+                const pdfViewer = Ext.create('FileManagement.components.viewers.PDFViewer', {
                     src: objectURL,
                     title: fileName || 'PDF Viewer',
                     showFileName: true,
                     loadingText: 'I am receiving the file'
                 });
 
-                // Create a window to display the PDF viewer
-                const pdfWindow = Ext.create('Ext.window.Window', {
-                    title: 'PDF Viewer: ' + fileName,
-                    modal: true,
-                    width: 800,
-                    height: 600,
-                    layout: 'fit',
-                    items: [pdfViewerPanel],
-                    listeners: {
-                        close: function () {
-                            pdfViewerPanel.destroy(); // Clean up the viewer panel on close
-                            URL.revokeObjectURL(objectURL); // Clean up the blob URL
-                        }
-                    }
-                });
+                mainPanelRegion.add(pdfViewer);
 
-                // Show the window
-                pdfWindow.show();
+                // Optional: Add a listener to clean up the object URL when the viewer is destroyed
+                pdfViewer.on('destroy', function() {
+                    URL.revokeObjectURL(objectURL); // Clean up the blob URL
+                });
             })
             .catch(function(error) {
                 Ext.Msg.alert('Error', error.message); // Handle errors
             });
     },
 
-    openOfficeViewer: async function (filePath, fileName) {
+    openOfficeViewer: function(filePath, fileName) {
         const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
-        // const viewerUrl = `https://docs.google.com/gview?url=${filePath}&embedded=true`;
-        const viewerUrl = `https://docs.google.com/gview?url=https://onlinetestcase.com/wp-content/uploads/2023/06/100-kb.xlsx&embedded=true`;
+        const viewerUrl = `https://docs.google.com/gview?url=${filePath}&embedded=true`;
 
         // Create a window to display the office document
         const officeWindow = Ext.create('Ext.window.Window', {
             title: 'Office Document Viewer: ' + fileName,
-            modal: true,
             width: 800,
             height: 600,
+            modal: true,
+            draggable: true,
             layout: 'fit',
+            autoShow: true,
+            constrain: true,
             items: [{
                 xtype: 'component',
                 autoEl: {
@@ -909,6 +967,44 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
         // Show the window
         officeWindow.show();
+    },
+
+    openTextViewer: async function(fileUrl, fileName) {
+        const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
+
+        try {
+            // Fetch the text file with the Authorization header
+            const response = await fetch(fileUrl, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            if (!response.ok) throw new Error('Failed to load text file');
+
+            // Convert the response to text
+            const textContent = await response.text();
+
+            // Create the window to display the text content
+            Ext.create('Ext.window.Window', {
+                title: 'Text Viewer: ' + fileName,
+                modal: true,
+                width: 600,
+                height: 400,
+                layout: 'fit',
+                constraint: true,
+                items: [{
+                    xtype: 'textarea',
+                    readOnly: true,
+                    value: textContent // Set the text content in the textarea
+                }],
+                buttons: [{
+                    text: 'Close',
+                    handler: function() {
+                        this.up('window').close();
+                    }
+                }]
+            }).show();
+        } catch (error) {
+            Ext.Msg.alert('Error', 'Failed to load the text file: ' + error.message);
+        }
     },
 
     // Function to load the contents of a folder

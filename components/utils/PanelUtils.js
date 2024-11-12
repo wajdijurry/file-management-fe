@@ -92,7 +92,13 @@ Ext.define('FileManagement.components.utils.PanelUtils', {
         this.updateNavigationPanelList();
     },
 
-    destroy: function() {
+    destroy: function(panel) {
+        // Clean up store and remove event listeners
+        if (typeof panel.getStore !== "undefined" && panel.getStore()) {
+            panel.getStore().removeAll();  // Clears store data to free up memory
+            panel.getStore().clearListeners();
+        }
+
         this.updateNavigationPanelList();
     },
 

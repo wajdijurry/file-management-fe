@@ -14,6 +14,41 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                     xtype: 'tbtext',
                     text: `Welcome, ${username}` // Display username on the left
                 },
+                {
+                    xtype: 'tbseparator'
+                },
+                {
+                    xtype: 'button',
+                    text: 'Files Explorer',
+                    iconCls: 'fa fa-folder-open fa-2xs',
+                    enableToggle: true,
+                    toggleHandler: function(button, pressed) {
+                        const mainPanelRegion = Ext.getCmp('mainPanelRegion');
+
+                        if (pressed) {
+                                const fileGridStore = Ext.create('FileManagement.components.stores.FileGridStore');
+                                let fileGridPanel = Ext.create('FileManagement.components.grids.FileGrid', {
+                                    xtype: 'filegrid',
+                                    store: fileGridStore,
+                                    x: 210,
+                                    y: 250,
+                                    title: 'File Grid Panel',
+                                    refBottomToolbarButton: button,
+                                    currentFolderPath: [],
+                                    currentFolder: null,
+                                    currentFolderId: null
+                                });
+                                mainPanelRegion.add(fileGridPanel);
+                        } else {
+                            // Destroy the panel if it exists when toggling off
+                            let fileGridPanel = Ext.ComponentQuery.query('filegrid')[0];
+
+                            if (fileGridPanel) {
+                                fileGridPanel.destroy();
+                            }
+                        }
+                    }
+                },
                 '->', // Pushes the logout button to the right
                 {
                     xtype: 'button',
