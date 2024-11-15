@@ -12,7 +12,7 @@ Ext.define('FileManagement.components.navigation.NavigationPanel', {
 
     initComponent: function() {
         // Initialize the store
-        this.panelListStore = Ext.create('FileManagement.components.stores.PanelListStore');
+        const panelListStore = Ext.create('FileManagement.components.stores.PanelListStore');
 
         Ext.apply(this, {
             items: [
@@ -20,7 +20,7 @@ Ext.define('FileManagement.components.navigation.NavigationPanel', {
                     xtype: 'dataview',
                     itemId: 'panelList',
                     bind: {
-                        store: '{panelListStore}' // Use the store initialized above
+                        store: panelListStore // Use the store initialized above
                     },
                     itemTpl: '{title}',
                     listeners: {

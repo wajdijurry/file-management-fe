@@ -13,9 +13,8 @@ Ext.application({
 
     requires: [
         'Ext.container.Viewport',
-        'FileManagement.components.stores.FileGridStore',
         'FileManagement.components.grids.FileGrid',
-        'FileManagement.components.viewers.PDFViewer',
+        'FileManagement.components.viewers.ViewerFactory',
         'FileManagement.components.utils.PanelUtils',
         'FileManagement.components.navigation.NavigationPanel',
         'FileManagement.components.navigation.UserToolbar',

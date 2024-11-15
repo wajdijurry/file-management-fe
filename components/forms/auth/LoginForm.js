@@ -36,13 +36,8 @@ Ext.define('FileManagement.components.forms.auth.LoginForm', {
                                 const rememberMe = form.findField('rememberMe').getValue();
 
                                 // Store the token and username
-                                if (rememberMe) {
-                                    localStorage.setItem('token', token);
-                                    localStorage.setItem('username', username);
-                                } else {
-                                    sessionStorage.setItem('token', token);
-                                    sessionStorage.setItem('username', username);
-                                }
+                                localStorage.setItem('token', token);
+                                localStorage.setItem('username', username);
 
                                 // Reload the application to ensure updates
                                 Ext.Msg.alert('Success', 'Logged in successfully', function() {

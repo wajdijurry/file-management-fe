@@ -4,5 +4,5 @@ Ext.define('FileManagement.helpers.Functions', {
 
     getToken: function () {
         return localStorage.getItem('token');
-    }
+    },
 });

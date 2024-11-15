@@ -91,74 +91,22 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
     // Define the columns for the grid
     columns: [
+        // { text: 'Name', dataIndex: 'name', flex: 1 },
         {
-            text: 'File Type',
-            dataIndex: 'mimetype',
-            width: 50,
-            renderer: function (value, metadata, record) {
-                // Return the appropriate CSS class based on the file type
-                let iconClass = 'fa fa-xl'; // Base class
-
-                if (record.get('isFolder')) {
-                    iconClass += ' fa-folder'; // Folder icon
-                } else {
-                    switch (value) {
-                        case 'application/pdf':
-                            iconClass += ' fa-file-pdf red-icon';
-                            break;
-                        case 'image/jpeg':
-                        case 'image/png':
-                            iconClass += ' fa-image green-icon';
-                            break;
-                        case 'doc':
-                            iconClass += ' icon-doc blue-icon';
-                            break;
-                        case 'application/zip':
-                            iconClass += ' fa-file-archive yellow-icon';
-                            break;
-                        case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
-                        case 'application/msword':
-                            iconClass += ' fa-light fa-file-word blue-icon';
-                            break;
-                        case 'application/vnd.ms-powerpoint':
-                        case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
-                            iconClass = 'fa-duotone fa-solid fa-file-ppt fa-xl';
-                        // Add more cases as needed
-                        default:
-                            iconClass += ' icon-default'; // Default icon class
-                    }
-
-                }
-                return `<div class="${iconClass}"></div>`;
-            }
-        },
-        {text: 'Name', dataIndex: 'name', flex: 1},
-        {
-            text: 'Size',
-            dataIndex: 'size',
+            text: 'Name',
+            dataIndex: 'name',
             flex: 1,
-            renderer: function (value, metadata, record) {
-                if (record.get('isFolder')) {
-                    // Display folder size for folders
-                    return value < 1024 ? `${value} Bytes` : value < 1024 * 1024 ? `${(value / 1024).toFixed(2)} KB` : `${(value / (1024 * 1024)).toFixed(2)} MB`;
-                }
-
-                if (value < 1024) {
-                    return value + ' Bytes';
-                } else if (value < 1024 * 1024) {
-                    return (value / 1024).toFixed(2) + ' KB';
-                } else if (value < 1024 * 1024 * 1024) {
-                    return (value / (1024 * 1024)).toFixed(2) + ' MB';
-                } else {
-                    return (value / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
-                }
+            renderer: function(value, metaData, record) {
+                const iconCls = record.get('icon');
+                return `<i class="${iconCls}" style="margin-right: 5px;"></i> ${Ext.String.htmlEncode(value)}`;
             }
         },
+        { text: 'Size', dataIndex: 'size', flex: 1 },
         {
             text: 'Upload Date',
             dataIndex: 'createdAt',
-            flex: 1,
-            renderer: Ext.util.Format.dateRenderer('Y-m-d H:i:s') // Format the date
+            width: 150,
+            renderer: Ext.util.Format.dateRenderer('Y-m-d H:i:s')  // Customize the date format here
         }
     ],
 
@@ -190,7 +138,8 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                 return record.get('name').toLowerCase().includes(newValue.toLowerCase());
                             });
                         }
-                    }
+                    }, // Adjust delay (300ms here) as needed,
+                    scope: this
                 }
             },
             {
@@ -284,52 +233,83 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 }
             },
             {
+                xtype: 'tbseparator'
+            },
+            {
                 text: 'Compress Selected',
                 iconCls: 'fa fa-compress',
                 id: 'compressButton',
                 disabled: true, // Initially disabled
                 handler: function() {
                     const grid = this.up('grid');
-                    const selection = grid.getSelectionModel().getSelection();
-                    const selectedItems = selection.map(record => record.get('name'));
 
-                    if (selectedItems.length === 0) {
-                        Ext.Msg.alert('Error', 'No items selected for compression.');
+                    grid.onCompressSelectedFiles(grid);
+                }
+            },
+            {
+                xtype: 'button',
+                text: 'Download',
+                iconCls: 'fa fa-download',
+                id: 'downloadButton',
+                disabled: true, // Initially disabled
+                handler: async function() {
+                    const grid = this.up('gridpanel'); // Access the FileGrid
+                    const selection = grid.getSelectionModel().getSelection(); // Get selected items
+
+                    if (selection.length === 0) {
+                        Ext.Msg.alert('Error', 'Please select at least one file to download.');
                         return;
                     }
 
-                    // Prompt for zip file name
-                    Ext.Msg.prompt('Zip File Name', 'Enter the name for the zip file:', function(btn, text) {
-                        if (btn === 'ok' && text) {
-                            const zipFileName = text.endsWith('.zip') ? text : `${text}.zip`;
-                            const selection = grid.getSelectionModel().getSelection();
-                            const selectedItems = selection.map(record => record.get('name'));
+                    const token = FileManagement.helpers.Functions.getToken();
 
-                            if (selectedItems.length === 0) {
-                                Ext.Msg.alert('Error', 'No items selected for compression.');
-                                return;
-                            }
+                    if (selection.length === 1) {
+                        // Single file download
+                        const file = selection[0];
+                        const filePath = file.get('path');
+                        const fileName = file.get('name');
+                        const chunkSize = 10 * 1024 * 1024; // 10 MB
 
-                            // Call the backend API to compress the selected items
-                            Ext.Ajax.request({
-                                url: 'http://localhost:5000/api/files/compress',
-                                method: 'POST',
-                                jsonData: {
-                                    items: selectedItems,
-                                    folder: grid.currentFolder,
-                                    zipFileName: zipFileName,
-                                    parentId: grid.currentFolderId
-                                },
-                                success: function(response) {
-                                    Ext.Msg.alert('Success', 'Files compressed successfully.');
-                                    grid.getStore().reload();
-                                },
-                                failure: function(response) {
-                                    Ext.Msg.alert('Error', 'Failed to compress files');
+                        await grid.downloadFileInChunks(filePath, fileName, token, chunkSize);
+                    } else {
+                        // Multiple file download as ZIP
+                        Ext.Msg.prompt('Zip File Name', 'Enter the name of the zip file:', async function(btn, zipFileName) {
+                            if (btn === 'ok' && zipFileName) {
+                                let filePaths = selection.map(record => record.get('path'));
+                                filePaths = filePaths.map(path => path.split('/').slice(1).join('/'));
+                                console.log(filePaths);
+                                zipFileName = zipFileName.endsWith('.zip') ? zipFileName : `${zipFileName}.zip`
+
+                                try {
+                                    const response = await fetch('http://localhost:5000/api/files/compress', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({
+                                            items: filePaths,
+                                            zipFileName,
+                                            folder: grid.currentFolder,
+                                            parentId: grid.currentFolderId
+                                        }),
+                                    });
+
+                                    if (!response.ok) {
+                                        throw new Error('Failed to create ZIP file.');
+                                    }
+
+                                    const zipFile = await response.json();
+                                    let zipFilePath = zipFile.file.path;
+
+                                    // Download the ZIP in chunks
+                                    await grid.downloadFileInChunks(zipFilePath, `${zipFileName}.zip`, token, 10 * 1024 * 1024); // 10 MB chunks
+                                } catch (error) {
+                                    Ext.Msg.alert('Error', `Failed to download ZIP: ${error.message}`);
                                 }
-                            });
-                        }
-                    });
+                            }
+                        });
+                    }
                 }
             },
             {
@@ -346,6 +326,24 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         // Create the context menu
         me.contextMenu = Ext.create('Ext.menu.Menu', {
             items: [
+                {
+                    text: 'View',
+                    iconCls: 'fa fa-eye',
+                    itemId: 'viewMenuItem',
+                    hidden: true, // Initially hidden; shown only for files
+                    handler: function () {
+                        me.onViewFile();
+                    }
+                },
+                {
+                    text: 'Open',
+                    iconCls: 'fa fa-folder-open',
+                    itemId: 'openMenuItem',
+                    hidden: true, // Initially hidden; shown only for folders
+                    handler: function (menuItem, e) {
+                        me.onOpenFolder();
+                    }
+                },
                 {
                     text: 'Delete',
                     iconCls: 'fa fa-trash red-icon', // Add the custom class here
@@ -410,10 +408,26 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             ],
             listeners: {
                 show: function(menu, e) {
+                    const viewMenuItem = menu.down('#viewMenuItem');
+                    const openMenuItem = menu.down('#openMenuItem');
                     const grid = Ext.ComponentQuery.query('filegrid')[0];
                     const selection = grid.getSelectionModel().getSelection();
                     const decompressMenuItem = menu.down('#decompressMenuItem');
                     const actionsMenu = menu.down('#actionsMenu');
+
+                    // Reset visibility
+                    viewMenuItem.setHidden(true);
+                    openMenuItem.setHidden(true);
+
+                    // Show "View" only if exactly one file is selected
+                    if (selection.length === 1 && !selection[0].get('isFolder')) {
+                        viewMenuItem.setHidden(false);
+                    }
+
+                    // Show "Open" only if exactly one folder is selected
+                    if (selection.length === 1 && selection[0].get('isFolder')) {
+                        openMenuItem.setHidden(false);
+                    }
 
                     // Show "Decompress" only if exactly one item is selected and it is a zip file
                     const shouldShowDecompress = selection.length === 1 && selection[0].get('mimetype') === 'application/zip';
@@ -451,21 +465,21 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
         me.callParent(arguments);
 
-        // Initialize breadcrumb path to root on load
-        this.updateBreadcrumb([]);
-
         me.on('afterrender', function () {
             me.loadFiles();
         });
 
         // Add selection change listener to enable/disable the delete button
         me.getSelectionModel().on('selectionchange', function (selModel, selected) {
-            var deleteButton = me.down('#deleteButton'); // Get the delete button
-            deleteButton.setDisabled(selected.length === 0); // Enable/disable based on selection
+            var deleteButton = me.down('#deleteButton');
+            deleteButton.setDisabled(selected.length === 0);
 
             var compressButton = me.down('#compressButton');
-            // Enable the button if there are selected items; disable it otherwise
             compressButton.setDisabled(selected.length === 0);
+
+            // Disable download button if nothing selected or a folder is selected
+            var downloadButton = me.down('#downloadButton');
+            downloadButton.setDisabled(selected.length === 0 || selected.filter(item => item.get('isFolder')).length > 0);
         });
 
         // Add context menu listener
@@ -479,7 +493,31 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             me.onFileDoubleClick(record);
         });
 
+
         me.updateBreadcrumb([]);
+    },
+
+    // Handler for "View" option (for files)
+    onViewFile: function() {
+        const record = this.getSelectionModel().getSelection()[0];
+
+        // Use ViewerFactory to open the file in the appropriate viewer
+        const viewer = FileManagement.components.viewers.ViewerFactory.createViewer(record);
+        if (viewer) {
+            viewer.show();
+        } else {
+            Ext.Msg.alert('Error', 'Unable to view this file type.');
+        }
+    },
+
+    // Handler for "Open" option (for folders)
+    onOpenFolder: function() {
+        const record = this.getSelectionModel().getSelection()[0];
+        const folderName = record.get('name');
+        const folderId = record.get('_id');
+
+        // Call the method to load folder contents
+        this.loadFolderContents(folderName, folderId);
     },
 
     // Method to update the breadcrumb based on the current folder path
@@ -546,31 +584,15 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         });
     },
 
-    onDeleteFiles: function () {
-        var me = this;
-        var selection = me.getSelectionModel().getSelection();
+    // FileGrid.js
+    onDeleteFiles: function() {
+        const selectedRecords = this.getSelectionModel().getSelection();
+        const fileIds = selectedRecords.map(record => record.get('_id'));
 
-        if (selection.length > 0) {
-            Ext.Msg.confirm('Confirm', 'Are you sure you want to delete the selected files?', function (btn) {
+        if (fileIds.length > 0) {
+            Ext.Msg.confirm('Confirm', 'Are you sure you want to delete the selected files?', (btn) => {
                 if (btn === 'yes') {
-                    var fileIds = selection.map(record => record.get('_id')); // Get the IDs of selected files
-                    Ext.Ajax.request({
-                        url: 'http://localhost:5000/api/files', // Adjust the URL to handle batch deletion
-                        method: 'DELETE',
-                        jsonData: {ids: fileIds}, // Send the IDs in the request body
-                        success: function (response) {
-                            var data = Ext.decode(response.responseText);
-                            if (data.success) {
-                                me.getStore().remove(selection); // Remove selected records from the store
-                                Ext.Msg.alert('Success', 'Files/Folders deleted successfully.');
-                            } else {
-                                Ext.Msg.alert('Error', 'Failed to delete the files: ' + data.message);
-                            }
-                        },
-                        failure: function (response) {
-                            Ext.Msg.alert('Error', 'Server error: ' + response.statusText);
-                        }
-                    });
+                    this.getStore().deleteFiles(fileIds);
                 }
             });
         } else {
@@ -578,432 +600,34 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         }
     },
 
-    onRenameFile: function () {
-        var me = this;
-        var selection = me.getSelectionModel().getSelection()[0];
+    onCompressSelectedFiles: function(grid) {
+        const selectedRecords = this.getSelectionModel().getSelection();
+        if (selectedRecords) {
+            this.getStore().compressSelected(grid, selectedRecords, grid.currentFolderId, grid.currentFolder);
+        }
+    },
 
-        if (selection) {
-            const currentName = selection.get('name'); // Get the current file name
+    onRenameFile: function() {
+        const selectedRecord = this.getSelectionModel().getSelection()[0];
+        if (selectedRecord) {
+            const fileId = selectedRecord.get('_id');
+            const currentName = selectedRecord.get('name');
+            const isFolder = selectedRecord.get('isFolder');
 
-            Ext.Msg.prompt('Rename', 'Enter new name:', function (btn, newName) {
-                if (btn === 'ok' && newName) {
-                    Ext.Ajax.request({
-                        url: 'http://localhost:5000/api/files/rename',
-                        method: 'POST',
-                        jsonData: {
-                            itemId: selection.get('_id'),
-                            newName: newName,
-                            isFolder: selection.get('isFolder')
-                        },
-                        success: function(response) {
-                            Ext.Msg.alert('Success', 'File/Folder renamed successfully.');
-                            const store = this.getStore();
-                            if (store) {
-                                store.reload();
-                            }
-                        },
-                        failure: function(response) {
-                            Ext.Msg.alert('Error', 'Failed to rename file/folder');
-                        },
-                        scope: this // Preserve the context
-                    });
+            Ext.Msg.prompt('Rename', 'Enter new name:', (btn, newName) => {
+                if (btn === 'ok' && newName && newName !== currentName) {
+                    this.getStore().renameFile(fileId, newName, isFolder);
                 }
-            }, this, false, currentName)
+            }, this, false, currentName);
         }
     },
 
     onFileDoubleClick: function (record) {
-        var fileType = record.get('mimetype');
-        var filePath = record.get('_id');
-        var fileName = record.get('name');
-
-        if (fileType.startsWith('image/')) {
-            this.openImageViewer(`http://localhost:5000/api/files/view/${filePath}`);
-        } else if (fileType === 'application/zip') {
-            this.openZipViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
-        } else if (fileType === 'application/pdf') {
-            this.openPdfViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
-        } else if (fileType === 'application/msword' ||
-            fileType === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
-            fileType === 'application/vnd.ms-excel' ||
-            fileType === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' ||
-            fileType === 'application/vnd.ms-powerpoint' ||
-            fileType === 'application/vnd.openxmlformats-officedocument.presentationml.presentation') {
-            this.openOfficeViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
-        } else if (record.get('isFolder')) {
+        if (record.get('isFolder')) {
             this.loadFolderContents(record.get('name'), record.get('_id'));
-        } else if (fileType === 'text/plain') {
-            this.openTextViewer(`http://localhost:5000/api/files/view/${filePath}`, fileName);
         } else {
-            Ext.Msg.alert('Unsupported File Type', 'The selected file type is not supported for viewing.');
-        }
-    },
-
-    openImageViewer: function (imagePath) {
-        const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
-
-        // Create the window to display the image
-        const imageWindow = Ext.create('Ext.window.Window', {
-            title: 'Image Viewer',
-            modal: true,
-            draggable: true,
-            layout: 'fit',
-            autoShow: true,
-            constrain: true,
-            items: [{
-                xtype: 'image',
-                listeners: {
-                    afterrender: async function (img) {
-                        try {
-                            // Fetch the image with the Authorization header
-                            const response = await fetch(imagePath, {
-                                headers: { 'Authorization': `Bearer ${token}` }
-                            });
-                            if (!response.ok) throw new Error('Failed to load image');
-
-                            // Convert the response to a blob and set it as the source
-                            const blob = await response.blob();
-                            const objectURL = URL.createObjectURL(blob);
-                            img.setSrc(objectURL);
-
-                            const image = new Image();
-                            image.src = objectURL;
-                            image.onload = () => {
-                                var naturalWidth = image.width;
-                                var naturalHeight = image.height;
-
-                                console.log('Natural Width:', naturalWidth, 'Natural Height:', naturalHeight);
-
-                                // Set the window size to the image's natural dimensions
-                                imageWindow.setWidth(naturalWidth);
-                                imageWindow.setHeight(naturalHeight);
-
-                                // Get screen dimensions
-                                var screenWidth = window.innerWidth;
-                                var screenHeight = window.innerHeight;
-
-                                // Set maximum dimensions based on screen size
-                                imageWindow.setMaxWidth(screenWidth * 0.9); // 90% of screen width
-                                imageWindow.setMaxHeight(screenHeight * 0.9); // 90% of screen height
-
-                                // Set minimum dimensions
-                                imageWindow.setMinWidth(300);   // Minimum width
-                                imageWindow.setMinHeight(200);   // Minimum height
-
-                                // Show the window and center it
-                                imageWindow.show();
-                                imageWindow.center();
-                            };
-
-                        } catch (error) {
-                            Ext.Msg.alert('Error', 'Failed to load the image.');
-                            imageWindow.close(); // Close the window if image loading fails
-                        }
-                    }
-                }
-            }],
-            listeners: {
-                close: function () {
-                    this.destroy(); // Clean up the window on close
-                }
-            }
-        });
-    },
-
-    openZipViewer: async function(zipFilePath, zipFileName) {
-        const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
-
-        try {
-            const response = await fetch(zipFilePath, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Network response was not ok');
-            const zipData = await response.arrayBuffer();
-
-            const zip = await JSZip.loadAsync(zipData);
-            this.currentZip = zip;
-            this.zipStack = [];
-            this.processZipEntries(zip, zipFileName);
-        } catch (error) {
-            Ext.Msg.alert('Error', `Failed to load the zip file: ${error.message}`);
-        }
-    },
-
-    processZipEntries: function(zip, parentPath) {
-        var me = this;
-        var fileList = [];
-
-        zip.forEach(function(relativePath, zipEntry) {
-            if (zipEntry.dir) {
-                // Skip directories
-                return;
-            }
-
-            fileList.push(zipEntry.name); // Collect file names
-        });
-
-        // After processing all entries, display the contents
-        me.showZipContents(fileList, parentPath, zip);
-    },
-
-    showZipContents: function(fileList, parentPath, zip) {
-        var me = this;
-
-        // Create a new window to display the zip contents if it doesn't exist or has been closed
-        if (!me.zipWindow || !me.zipWindow.isVisible()) {
-            me.zipWindow = Ext.create('Ext.window.Window', {
-                title: 'Zip File Contents', // Initial title
-                modal: true,
-                layout: 'fit',
-                width: 400,
-                height: 300,
-                constrain: true, // Enable constraint
-                items: [{
-                    xtype: 'gridpanel',
-                    store: {
-                        fields: ['name'],
-                        data: [] // Initialize with empty data
-                    },
-                    columns: [
-                        { text: 'File Name', dataIndex: 'name', flex: 1 }
-                    ],
-                    tbar: [ // Add a toolbar for the Go Back button and search field
-                        {
-                            xtype: 'button',
-                            iconCls: 'fa fa-arrow-left', // Use Font Awesome icon class
-                            tooltip: 'Go Back',
-                            handler: function() {
-                                // Clear the search field
-                                var searchField = this.up('toolbar').down('textfield'); // Get the search field
-                                searchField.setValue(''); // Clear the search field
-
-                                // Pop the last zip from the stack
-                                var previousZip = me.zipStack.pop();
-                                // Show the previous zip contents
-                                if (previousZip) {
-                                    me.processZipEntries(previousZip, parentPath);
-                                } else {
-                                    this.hide(); // Hide the button if there are no previous zips
-                                }
-                            }
-                        },
-                        {
-                            xtype: 'textfield',
-                            emptyText: 'Search by file name...',
-                            listeners: {
-                                change: function(field, newValue) {
-                                    var grid = field.up('gridpanel');
-                                    var store = grid.getStore();
-
-                                    // Clear any existing filters
-                                    store.clearFilter();
-
-                                    // Apply the new filter
-                                    if (newValue) {
-                                        store.filterBy(function(record) {
-                                            // Assuming 'name' is the field you want to search
-                                            return record.get('name').toLowerCase().includes(newValue.toLowerCase());
-                                        });
-                                    }
-                                }
-                            }
-                        }
-                    ],
-                    listeners: {
-                        itemdblclick: function(grid, record) {
-                            var fileName = record.get('name');
-                            var zipEntry = zip.file(fileName); // Get the zip entry
-
-                            // Check if the entry is a zip file
-                            if (zipEntry && fileName.endsWith('.zip')) {
-                                // Load the inner zip file
-                                zipEntry.async('arraybuffer').then(function(innerZipData) {
-                                    // Use JSZip to read the inner zip file
-                                    JSZip.loadAsync(innerZipData).then(function(innerZip) {
-                                        // Push the current zip onto the stack
-                                        me.zipStack.push(zip);
-                                        // Process inner zip entries
-                                        me.processZipEntries(innerZip, fileName);
-                                    }).catch(function(err) {
-                                        Ext.Msg.alert('Error', 'Failed to read the inner zip file: ' + err.message);
-                                    });
-                                });
-                            } else {
-                                Ext.Msg.alert('Info', 'This file is not a zip file: ' + fileName);
-                            }
-                        }
-                    }
-                }],
-                buttons: [{
-                    text: 'Close',
-                    handler: function() {
-                        me.zipWindow.close();
-                    }
-                }]
-            });
-        }
-
-        // Update the grid store with the new file list
-        me.zipWindow.down('gridpanel').getStore().loadData(fileList.map(function(name) { return { name: name }; }));
-
-        // Update the title to reflect the name of the currently opened zip file
-        me.zipWindow.setTitle('Contents of: ' + parentPath); // Set the title to the name of the zip file
-
-        // Show or hide the Go Back button based on the stack
-        var goBackButton = me.zipWindow.down('toolbar').items.getAt(0); // Get the Go Back button
-        if (me.zipStack.length > 0) {
-            goBackButton.show(); // Show the button if there is a previous zip
-        } else {
-            goBackButton.hide(); // Hide the button if there are no previous zips
-        }
-
-        // Show the zip window
-        me.zipWindow.show();
-    },
-
-    openPdfViewer: function (fileUrl, fileName) {
-        const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
-
-        // Fetch the PDF file with the Authorization header
-        fetch(fileUrl, {
-            headers: { 'Authorization': `Bearer ${token}` }
-        })
-            .then(function(response) {
-                if (!response.ok) {
-                    throw new Error('Failed to load PDF file');
-                }
-                return response.blob(); // Convert response to blob
-            })
-            .then(function(blob) {
-                // const objectURL = URL.createObjectURL(blob); // Create a blob URL
-                //
-                // // Create the PDF viewer panel using the custom Ext.ux.PDFViewer component
-                // const pdfViewerPanel = Ext.create('FileManagement.components.viewers.PDFViewer', {
-                //     src: objectURL,
-                //     title: fileName || 'PDF Viewer',
-                //     showFileName: true,
-                //     loadingText: 'I am receiving the file'
-                // });
-                //
-                // // Create a window to display the PDF viewer
-                // const pdfWindow = Ext.create('Ext.window.Window', {
-                //     title: 'PDF Viewer: ' + fileName,
-                //     modal: true,
-                //     width: 800,
-                //     height: 600,
-                //     layout: 'fit',
-                //     items: [pdfViewerPanel],
-                //     constraint: true,
-                //     listeners: {
-                //         close: function () {
-                //             pdfViewerPanel.destroy(); // Clean up the viewer panel on close
-                //             URL.revokeObjectURL(objectURL); // Clean up the blob URL
-                //         }
-                //     }
-                // });
-                //
-                // // Show the window
-                // pdfWindow.show();
-
-                const objectURL = URL.createObjectURL(blob); // Create a blob URL
-
-                // Find the main panel region where you want to display the PDF viewer
-                const mainPanelRegion = Ext.getCmp('mainPanelRegion');
-
-                // Clear any previous instances of the PDF viewer to prevent duplicates
-                let existingPdfViewer = mainPanelRegion.down('pdfviewer');
-                if (existingPdfViewer) {
-                    existingPdfViewer.destroy(); // Remove the previous instance
-                }
-
-                // Create and add the PDFViewer component directly
-                const pdfViewer = Ext.create('FileManagement.components.viewers.PDFViewer', {
-                    src: objectURL,
-                    title: fileName || 'PDF Viewer',
-                    showFileName: true,
-                    loadingText: 'I am receiving the file'
-                });
-
-                mainPanelRegion.add(pdfViewer);
-
-                // Optional: Add a listener to clean up the object URL when the viewer is destroyed
-                pdfViewer.on('destroy', function() {
-                    URL.revokeObjectURL(objectURL); // Clean up the blob URL
-                });
-            })
-            .catch(function(error) {
-                Ext.Msg.alert('Error', error.message); // Handle errors
-            });
-    },
-
-    openOfficeViewer: function(filePath, fileName) {
-        const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
-        const viewerUrl = `https://docs.google.com/gview?url=${filePath}&embedded=true`;
-
-        // Create a window to display the office document
-        const officeWindow = Ext.create('Ext.window.Window', {
-            title: 'Office Document Viewer: ' + fileName,
-            width: 800,
-            height: 600,
-            modal: true,
-            draggable: true,
-            layout: 'fit',
-            autoShow: true,
-            constrain: true,
-            items: [{
-                xtype: 'component',
-                autoEl: {
-                    tag: 'iframe',
-                    src: viewerUrl,
-                    style: 'width: 100%; height: 100%; border: none;'
-                }
-            }],
-            listeners: {
-                close: function () {
-                    this.destroy(); // Clean up the window on close
-                }
-            }
-        });
-
-        // Show the window
-        officeWindow.show();
-    },
-
-    openTextViewer: async function(fileUrl, fileName) {
-        const token = FileManagement.helpers.Functions.getToken(); // Retrieve the token
-
-        try {
-            // Fetch the text file with the Authorization header
-            const response = await fetch(fileUrl, {
-                headers: { 'Authorization': `Bearer ${token}` }
-            });
-            if (!response.ok) throw new Error('Failed to load text file');
-
-            // Convert the response to text
-            const textContent = await response.text();
-
-            // Create the window to display the text content
-            Ext.create('Ext.window.Window', {
-                title: 'Text Viewer: ' + fileName,
-                modal: true,
-                width: 600,
-                height: 400,
-                layout: 'fit',
-                constraint: true,
-                items: [{
-                    xtype: 'textarea',
-                    readOnly: true,
-                    value: textContent // Set the text content in the textarea
-                }],
-                buttons: [{
-                    text: 'Close',
-                    handler: function() {
-                        this.up('window').close();
-                    }
-                }]
-            }).show();
-        } catch (error) {
-            Ext.Msg.alert('Error', 'Failed to load the text file: ' + error.message);
+            const viewer = FileManagement.components.viewers.ViewerFactory.createViewer(record);
+            if (viewer) viewer.show();
         }
     },
 
@@ -1053,6 +677,106 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             this.navigateToRoot();
         } else {
             Ext.Msg.alert('Info', 'You are already in the root folder.');
+        }
+    },
+
+    viewConfig: {
+        plugins: {
+            ptype: 'gridviewdragdrop',
+            dragText: 'Drag and drop to move'
+        },
+        listeners: {
+            drop: function(node, data, overModel, dropPosition, eOpts) {
+                // Check if the target is a folder
+                if (overModel.get('isFolder')) {
+                    const draggedRecords = data.records;
+                    const targetFolderId = overModel.get('_id');
+
+                    // Call the moveItem function for each dragged record
+                    draggedRecords.forEach(record => {
+                        this.up('filegrid').moveItem(record, targetFolderId);
+                    });
+                } else {
+                    Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder.');
+                }
+            }
+        }
+    },
+
+    // Method to handle moving the item to another folder
+    moveItem: function(record, targetFolderId) {
+        const itemId = record.get('_id');
+
+        // Call the backend to update the folder location
+        Ext.Ajax.request({
+            url: `http://localhost:5000/api/files/move`,
+            method: 'POST',
+            jsonData: {
+                itemId: itemId,
+                targetFolderId: targetFolderId
+            },
+            success: () => {
+                Ext.Msg.alert('Success', 'Item moved successfully.');
+                this.getStore().reload(); // Refresh the grid after moving
+            },
+            failure: (response) => {
+                const responseText = Ext.decode(response.responseText);
+                Ext.Msg.alert('Error', responseText.message || 'Failed to move the item.');
+            }
+        });
+    },
+
+    downloadFileInChunks: async function (filePath, fileName, token, chunkSize) {
+        let start = 0;
+        const chunks = [];
+
+        try {
+            // Fetch the file size from the backend
+            const metadataResponse = await fetch('http://localhost:5000/api/files/file-size', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ filePath }),
+            });
+
+            if (!metadataResponse.ok) {
+                throw new Error('Failed to fetch file metadata.');
+            }
+
+            const { fileSize } = await metadataResponse.json();
+
+            // Fetch file chunks
+            while (start < fileSize) {
+                const end = Math.min(start + chunkSize - 1, fileSize - 1);
+                const chunkResponse = await fetch('http://localhost:5000/api/files/download', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Range': `bytes=${start}-${end}`,
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ filePath }),
+                });
+
+                if (!chunkResponse.ok) {
+                    throw new Error('Failed to download chunk.');
+                }
+
+                const chunk = await chunkResponse.blob();
+                chunks.push(chunk);
+                start += chunkSize;
+            }
+
+            // Combine chunks into a single Blob
+            const blob = new Blob(chunks);
+            const link = document.createElement('a');
+            link.href = window.URL.createObjectURL(blob);
+            link.download = fileName;
+            link.click();
+        } catch (error) {
+            Ext.Msg.alert('Error', `Download failed: ${error.message}`);
         }
     }
 

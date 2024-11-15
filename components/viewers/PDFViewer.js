@@ -1,54 +1,63 @@
 // PDFViewer.js
 Ext.define('FileManagement.components.viewers.PDFViewer', {
-    extend: 'Ext.Panel',
-    xtype: 'pdf-viewer',
+    extend: 'Ext.window.Window',
+    xtype: 'pdfviewer',
 
     config: {
         src: null,
-        showFileName: true,
+        fileName: null
     },
 
-    docType: 'pdf',
-    loadingText: 'Loading file...',
+    title: 'PDF Viewer',
+    modal: true,
+    layout: 'fit',
+    width: 800,
+    height: 600,
+    constrain: true,
+    closable: true,
 
-    bbar: {
-        items: ['->', {
+    initComponent: function() {
+        // Initialize the PDF viewer with a placeholder component
+        this.items = [{
             xtype: 'container',
-            reference: 'bbar'
-        }]
+            html: 'Loading PDF...',
+            style: 'width: 100%; height: 100%; text-align: center; padding-top: 20px;'
+        }];
+
+        this.callParent(arguments);
+
+        // Load the PDF content after initialization
+        this.loadPdfContent();
     },
 
-    updateSrc: function (uri) {
-        let html = this[this.docType + 'Display'](uri);
-        this.setHtml(html);
+    loadPdfContent: async function() {
+        const token = FileManagement.helpers.Functions.getToken();
+        const fileUrl = this.getSrc();
 
-        if (this.rendered) {
-            this.getDockedItems()[1].items.items[1].setHtml(uri);
-        } else {
-            this.bbar.items[1].html = uri;
-        }
-    },
+        try {
+            // Fetch the PDF file with the Authorization header
+            const response = await fetch(fileUrl, { headers: { 'Authorization': `Bearer ${token}` } });
+            if (!response.ok) throw new Error('Failed to load PDF file');
 
-    pdfDisplay: function (uri) {
-        // Create an iframe for PDF display
-        return '<iframe src="' + uri + '" width="100%" height="100%" frameborder="0" style="border:none;">' +
-            '<p>Your browser does not support embedded PDFs. <a href="' + uri + '" target="_blank">Click here to download the PDF file.</a></p>' +
-            '</iframe>';
-    },
+            const blob = await response.blob();
+            const objectURL = URL.createObjectURL(blob);
 
-    docxDisplay: function (uri) {
-        return '<iframe src="https://view.officeapps.live.com/op/embed.aspx?src=' + uri + '" width="100%" height="100%" frameborder="0">' +
-            'This is an embedded ' +
-            '<a target="_blank" href="http://office.com">Microsoft Office</a> document, powered by ' +
-            '<a target="_blank" href="http://office.com/webapps">Office Online</a>.' +
-            '</iframe>';
-    },
+            // Set up the PDF viewer component after loading
+            this.removeAll(); // Clear loading placeholder
+            this.add({
+                xtype: 'component',
+                autoEl: {
+                    tag: 'iframe',
+                    src: objectURL,
+                    style: 'width: 100%; height: 100%; border: none;'
+                }
+            });
 
-    updateShowFileName: function (doShow) {
-        if (this.rendered) {
-            this.getDockedItems()[1].setHidden(!doShow);
-        } else {
-            this.bbar.hidden = !doShow;
+            this.center(); // Center the window on the screen
+            this.show();
+        } catch (error) {
+            Ext.Msg.alert('Error', 'Failed to load the PDF file: ' + error.message);
+            this.close();
         }
     }
 });

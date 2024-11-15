@@ -52,6 +52,44 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                 '->', // Pushes the logout button to the right
                 {
                     xtype: 'button',
+                    text: 'K-Shortcuts',
+                    iconCls: 'fa fa-regular fa-keyboard',
+                    handler: function() {
+                        // Show the keyboard shortcuts window
+                        Ext.create('Ext.window.Window', {
+                            title: 'Keyboard Shortcuts',
+                            modal: true,
+                            width: 400,
+                            height: 300,
+                            layout: 'fit',
+                            items: [
+                                {
+                                    xtype: 'grid',
+                                    columns: [
+                                        { text: 'Shortcut', dataIndex: 'shortcut', flex: 1 },
+                                        { text: 'Description', dataIndex: 'description', flex: 2 }
+                                    ],
+                                    store: {
+                                        fields: ['shortcut', 'description'],
+                                        data: [
+                                            { shortcut: 'Alt+Q', description: 'Switch between panels' }
+                                        ]
+                                    }
+                                }
+                            ],
+                            buttons: [
+                                {
+                                    text: 'Close',
+                                    handler: function(button) {
+                                        button.up('window').close();
+                                    }
+                                }
+                            ]
+                        }).show();
+                    }
+                },
+                {
+                    xtype: 'button',
                     text: 'Logout',
                     iconCls: 'fa fa-sign-out',
                     handler: function() {
