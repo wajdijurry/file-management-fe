@@ -277,7 +277,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                             if (btn === 'ok' && zipFileName) {
                                 let filePaths = selection.map(record => record.get('path'));
                                 filePaths = filePaths.map(path => path.split('/').slice(1).join('/'));
-                                console.log(filePaths);
                                 zipFileName = zipFileName.endsWith('.zip') ? zipFileName : `${zipFileName}.zip`
 
                                 try {
@@ -303,7 +302,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                     let zipFilePath = zipFile.file.path;
 
                                     // Download the ZIP in chunks
-                                    await grid.downloadFileInChunks(zipFilePath, `${zipFileName}.zip`, token, 10 * 1024 * 1024); // 10 MB chunks
+                                    await grid.downloadFileInChunks(zipFilePath, `${zipFileName}`, token, 2 * 1024 * 1024); // 10 MB chunks
                                 } catch (error) {
                                     Ext.Msg.alert('Error', `Failed to download ZIP: ${error.message}`);
                                 }
@@ -479,7 +478,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
             // Disable download button if nothing selected or a folder is selected
             var downloadButton = me.down('#downloadButton');
-            downloadButton.setDisabled(selected.length === 0 || selected.filter(item => item.get('isFolder')).length > 0);
+            downloadButton.setDisabled(selected.length === 0);
         });
 
         // Add context menu listener
@@ -754,7 +753,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     method: 'POST',
                     headers: {
                         'Authorization': `Bearer ${token}`,
-                        'Content-Range': `bytes=${start}-${end}`,
+                        'Range': `bytes=${start}-${end}`,
                         'Content-Type': 'application/json',
                     },
                     body: JSON.stringify({ filePath }),
@@ -764,13 +763,16 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     throw new Error('Failed to download chunk.');
                 }
 
-                const chunk = await chunkResponse.blob();
+                const chunk = await chunkResponse.arrayBuffer(); // Ensure raw data is received
                 chunks.push(chunk);
                 start += chunkSize;
             }
 
             // Combine chunks into a single Blob
-            const blob = new Blob(chunks);
+            const combinedBuffer = this.concatenateChunks(chunks);
+
+            // Create a Blob and download the file
+            const blob = new Blob([combinedBuffer], { type: 'application/zip' });
             const link = document.createElement('a');
             link.href = window.URL.createObjectURL(blob);
             link.download = fileName;
@@ -778,6 +780,19 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         } catch (error) {
             Ext.Msg.alert('Error', `Download failed: ${error.message}`);
         }
+    },
+
+    concatenateChunks: function (chunks) {
+        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
+        const combinedBuffer = new Uint8Array(totalLength);
+
+        let offset = 0;
+        chunks.forEach(chunk => {
+            combinedBuffer.set(new Uint8Array(chunk), offset);
+            offset += chunk.byteLength;
+        });
+
+        return combinedBuffer.buffer; // Return as ArrayBuffer
     }
 
 });
