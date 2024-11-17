@@ -22,6 +22,8 @@ Ext.application({
         'FileManagement.components.forms.auth.LoginForm',
         'FileManagement.components.forms.auth.RegisterForm',
         'FileManagement.helpers.Functions',
+        'FileManagement.components.utils.SocketManager',
+        'FileManagement.components.utils.ProgressBarManager',
     ],
 
     launch: function() {
@@ -101,7 +103,13 @@ Ext.application({
                             }
                         }
                     }
-                ]
+                ],
+                listeners: {
+                    afterrender: function (viewPort, e) {
+                        // Initialize WebSocket connection
+                        FileManagement.components.utils.SocketManager.initSocket();
+                    }
+                }
             });
         };
 

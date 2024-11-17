@@ -49,7 +49,6 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                         }
                     }
                 },
-                '->', // Pushes the logout button to the right
                 {
                     xtype: 'button',
                     text: 'K-Shortcuts',
@@ -97,13 +96,12 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                             if (choice === 'yes') {
                                 localStorage.removeItem('token');
                                 localStorage.removeItem('username');
-                                sessionStorage.removeItem('token');
-                                sessionStorage.removeItem('username');
                                 location.reload();
                             }
                         });
                     }
-                }
+                },
+                '->', // Pushes the logout button to the right
             ]
         });
 
