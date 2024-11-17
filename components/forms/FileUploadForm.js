@@ -4,6 +4,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
     title: 'Upload Files',
     bodyPadding: 10,
     frame: true,
+    draggable: true,
     closable: true,
 
     titleAlign: 'left',
