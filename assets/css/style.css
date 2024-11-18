@@ -22,3 +22,13 @@
     border: 1px solid #ccc;
     cursor: crosshair;
 }
+
+.ellipsis-progress .x-progress-text {
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    display: inline-block; /* Ensure it stays inline */
+    width: calc(100% - 10px); /* Allow space for padding */
+    text-align: center; /* Center-align the text */
+    line-height: 20px; /* Adjust line height for vertical centering */
+}

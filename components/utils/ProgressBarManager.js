@@ -16,34 +16,50 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
             data: files // Populate the store with initial data
         });
 
-        // Create the grid immediately
-        const fileQueueGrid = Ext.create('Ext.grid.Panel', {
-            itemId: `${id}-grid`,
-            store: fileQueueStore,
-            columns: [
-                { text: 'File Name', dataIndex: 'fileName', flex: 1 },
-                {
-                    text: 'Status',
-                    dataIndex: 'status',
-                    width: 150,
-                    renderer: function (value) {
-                        let iconHtml = '';
-                        if (value === 'Uploaded') {
-                            iconHtml = '<span style="color:green; margin-right:5px;" class="fa fa-check-circle"></span>';
-                        } else if (value === 'Failed') {
-                            iconHtml = '<span style="color:red; margin-right:5px;" class="fa fa-times-circle"></span>';
-                        } else if (value === 'Queued') {
-                            iconHtml = '<span style="color:blue; margin-right:5px;" class="fa fa-duotone fa-solid fa-clock"></span>';
-                        }
-                        return `${iconHtml}${value}`;
+        let queueWindow = null; // Reference to the queue window
+
+        const createQueueWindow = () => {
+            return Ext.create('Ext.window.Window', {
+                title: 'File Queue',
+                layout: 'fit',
+                width: 400,
+                height: 300,
+                closeAction: 'destroy', // Ensure the window is destroyed on close
+                items: [
+                    Ext.create('Ext.grid.Panel', {
+                        store: fileQueueStore,
+                        columns: [
+                            { text: 'File Name', dataIndex: 'fileName', flex: 1 },
+                            {
+                                text: 'Status',
+                                dataIndex: 'status',
+                                width: 150,
+                                renderer: function (value) {
+                                    let iconHtml = '';
+                                    if (value === 'Uploaded') {
+                                        iconHtml = '<span style="color:green; margin-right:5px;" class="fa fa-check-circle"></span>';
+                                    } else if (value === 'Failed') {
+                                        iconHtml = '<span style="color:red; margin-right:5px;" class="fa fa-times-circle"></span>';
+                                    } else if (value === 'Queued') {
+                                        iconHtml = '<span style="color:blue; margin-right:5px;" class="fa fa-clock"></span>';
+                                    }
+                                    return `${iconHtml}${value}`;
+                                }
+                            }
+                        ]
+                    })
+                ],
+                listeners: {
+                    close: function () {
+                        const queueButton = progressBarContainer.items.items[0];
+                        console.log(progressBarContainer.items);
+                        queueButton.toggle(false); // Reset the toggle state of the button when the window is closed
                     }
                 }
-            ],
-            width: 400,
-            height: 300 // Explicit dimensions to avoid layout issues
-        });
+            });
+        };
 
-        // Store references to the progress bar, grid, and store
+        // Add the progress bar to the toolbar
         const progressBarContainer = userToolbar.add({
             xtype: 'container',
             layout: 'hbox',
@@ -51,29 +67,37 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
                 {
                     xtype: 'button',
                     text: 'Queue',
-                    margin: '0 0 0 10',
+                    margin: '0 5 0 5',
+                    iconCls: 'fa fa-clock',
                     hidden: !showQueueButton,
-                    handler: function () {
-                        if (!fileQueueGrid.isVisible()) {
-                            const gridWindow = Ext.create('Ext.window.Window', {
-                                title: 'File Queue',
-                                layout: 'fit',
-                                items: [fileQueueGrid] // Attach the existing grid
-                            });
-                            gridWindow.show();
+                    enableToggle: true, // Enable toggle behavior
+                    toggleGroup: `${id}-queueGroup`, // Unique toggle group for this progress bar
+                    toggleHandler: function (button, pressed) {
+                        if (pressed) {
+                            if (!queueWindow) {
+                                queueWindow = createQueueWindow();
+                            }
+                            queueWindow.show();
+                        } else if (queueWindow) {
+                            queueWindow.destroy(); // Destroy the window on toggle off
+                            queueWindow = null; // Clear reference to avoid reuse of destroyed window
                         }
                     }
                 },
                 {
                     xtype: 'button',
                     text: 'Cancel',
-                    margin: '0 0 0 10',
+                    margin: '0 5 0 5',
+                    iconCls: 'fa fa-ban',
                     listeners: {
                         click: function () {
                             console.log('Cancel button pressed');
                             if (typeof cancelCallback === 'function') {
-                                console.log('Cancelled');
                                 cancelCallback(id); // Call the cancel callback to interrupt the operation
+                            }
+                            if (queueWindow) {
+                                queueWindow.destroy();
+                                queueWindow = null; // Clear reference
                             }
                             FileManagement.components.utils.ProgressBarManager.removeProgressBar(id); // Remove the progress bar
                         }
@@ -85,7 +109,8 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
                     text: this.getTruncatedTextWithProgress(text || '', 0, 300), // Apply truncated text
                     hidden: false,
                     flex: 1, // Allow dynamic resizing
-                    maxWidth: 400, // Set maximum width
+                    width: 300,
+                    maxWidth: 450, // Set maximum width
                     cls: 'ellipsis-progress', // Add custom CSS class
                     listeners: {
                         boxready: function (progressbar) {
@@ -96,14 +121,12 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
             ]
         });
 
+        // Store references to the progress bar and store
         this.progressBars[id] = {
-            progressBar: progressBarContainer.items.items[2], // Progress bar reference
-            grid: fileQueueGrid, // Grid reference
-            store: fileQueueStore, // Store reference,
-            cancelCallback
+            progressBar: progressBarContainer.items.items[2], // Correct progress bar reference
+            store: fileQueueStore, // Store reference
+            queueWindow: queueWindow // Store the window reference for cleanup
         };
-
-        console.log(`Added progress bar with ID: ${id}`, this.progressBars); // Debug log
     },
 
     /**
@@ -140,23 +163,22 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
             return;
         }
 
-        // Destroy the progress bar container
-        if (progressBarData.progressBar) {
-            progressBarData.progressBar.up('container').destroy();
+        // Destroy the associated queue window if it exists
+        if (progressBarData.queueWindow) {
+            progressBarData.queueWindow.destroy();
+            console.log(`Destroyed queue window for ID: ${id}`);
         }
 
-        // Destroy the associated grid (if it exists)
-        if (progressBarData.grid) {
-            const gridWindow = progressBarData.grid.up('window'); // Retrieve the parent window
-            if (gridWindow) {
-                gridWindow.destroy();
-            } else {
-                progressBarData.grid.destroy();
-            }
+        // Destroy the progress bar component
+        const progressBar = progressBarData.progressBar;
+        if (progressBar) {
+            progressBar.destroy();
+            console.log(`Destroyed progress bar for ID: ${id}`);
         }
 
-        // Remove the reference from the progressBars object
+        // Remove the reference from the manager
         delete this.progressBars[id];
+        console.log(`Removed progress bar with ID: ${id}`);
     },
 
     updateFileStatus: function (id, fileName, status) {

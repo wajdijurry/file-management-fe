@@ -28,7 +28,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
         },
         destroy: function() {
             FileManagement.components.utils.PanelUtils.destroy(this);
-        }
+        },
     },
 
     items: [
@@ -42,8 +42,9 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
             buttonText: 'Select Files...',
             multiple: true,
             listeners: {
-                render: function (filefield) {
-                    filefield.fileInputEl.dom.setAttribute('multiple', 'multiple'); // Set the file input to accept multiple files
+                afterrender: function (filefield) {
+                    // Set the file input to accept multiple files
+                    filefield.fileInputEl.dom.setAttribute('multiple', 'multiple');
                 }
             }
         }
@@ -54,6 +55,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
             text: 'Upload',
             handler: async function (btn) {
                 const form = btn.up('form').getForm();
+                // console.log(form);
                 if (!form.isValid()) return;
 
                 const fileField = form.findField('file');
@@ -110,6 +112,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
                 }
 
                 form.reset();
+                btn.up('form').destroy();
             }
         }
     ],
