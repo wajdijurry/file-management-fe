@@ -1,6 +1,6 @@
 // TextViewer.js
 Ext.define('FileManagement.components.viewers.TextViewer', {
-    extend: 'Ext.window.Window',
+    extend: 'Ext.panel.Panel',
     xtype: 'textviewer',
 
     config: {
@@ -8,32 +8,94 @@ Ext.define('FileManagement.components.viewers.TextViewer', {
     },
 
     title: 'Text Viewer',
-    modal: true,
-    width: 600,
-    height: 400,
     layout: 'fit',
-    constrain: true,
-    autoShow: true,
     closable: true,
+    frame: true,
+    modal: true,
 
-    initComponent: function() {
-        // Define items initially with an empty textarea to ensure proper rendering
+    width: 600, // Set a fixed width
+    height: 400, // Set a fixed height
+    x: 220,
+    y: 220,
+
+    style: {
+        zIndex: ++window.highestZIndex,
+    },
+
+    draggable: {
+        onMouseUp: function() {
+            FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
+        }
+    },
+
+    resizable: {
+        constrain: true, // Enable constraint within a specified element
+        dynamic: true, // Updates size dynamically as resizing
+        minHeight: 300,
+        minWidth: 450,
+    },
+
+    header: {
+        listeners: {
+            dblclick: function (header) {
+                const panel = header.up('panel');
+                FileManagement.components.utils.PanelUtils.toggleMaximize(panel);
+            }
+        }
+    },
+
+    tools: [
+        {
+            type: 'maximize',
+            handler: function () {
+                const panel = this.up('panel');
+                if (panel && !panel.maximized) {
+                    FileManagement.components.utils.PanelUtils.maximizePanel(panel);
+                } else if (panel) {
+                    FileManagement.components.utils.PanelUtils.minimizePanel(panel);
+                }
+            }
+        }
+    ],
+
+    initComponent: function () {
+        // Define items with the htmleditor for text editing
         this.items = [{
-            xtype: 'textarea',
-            readOnly: true,
+            xtype: 'htmleditor',
+            enableFont: false, // Keep plain text editing
+            enableSourceEdit: true, // Allow toggling between HTML source and view
             value: 'Loading...', // Temporary placeholder text
             style: 'width: 100%; height: 100%;',
             margin: '10'
         }];
 
-        // Call parent to complete initialization
+        // Add Save and Cancel buttons to the bottom toolbar
+        this.bbar = [
+            '->', // Align buttons to the right
+            {
+                text: 'Save',
+                iconCls: 'fa fa-save',
+                handler: this.saveTextContent.bind(this)
+            },
+            {
+                text: 'Cancel',
+                iconCls: 'fa fa-ban',
+                handler: () => {
+                    const parent = this.up();
+                    if (parent) {
+                        parent.remove(this); // Remove the panel from the parent container
+                    }
+                }
+            }
+        ];
+
         this.callParent(arguments);
 
         // Fetch the text content after the component is initialized
         this.loadTextContent();
     },
 
-    loadTextContent: async function() {
+    loadTextContent: async function () {
         const token = FileManagement.helpers.Functions.getToken();
         const fileUrl = this.getSrc();
 
@@ -43,18 +105,39 @@ Ext.define('FileManagement.components.viewers.TextViewer', {
 
             const textContent = await response.text();
 
-            // Update the textarea with the fetched content
-            const textArea = this.down('textarea');
-            if (textArea) {
-                textArea.setValue(textContent);
+            // Update the editor with the fetched content
+            const htmlEditor = this.down('htmleditor');
+            if (htmlEditor) {
+                htmlEditor.setValue(textContent);
             }
-
-            // Center and show the window after content is loaded
-            this.center();
-            this.show();
         } catch (error) {
             Ext.Msg.alert('Error', 'Failed to load the text file: ' + error.message);
-            this.close();
+        }
+    },
+
+    saveTextContent: async function () {
+        const token = FileManagement.helpers.Functions.getToken();
+        const fileUrl = this.getSrc();
+
+        // Get the updated content from the editor
+        const htmlEditor = this.down('htmleditor');
+        const updatedContent = htmlEditor ? htmlEditor.getValue() : '';
+
+        try {
+            const response = await fetch(fileUrl, {
+                method: 'PUT', // Use PUT or POST depending on your API
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'text/plain'
+                },
+                body: updatedContent
+            });
+
+            if (!response.ok) throw new Error('Failed to save text file');
+
+            Ext.Msg.alert('Success', 'File saved successfully!');
+        } catch (error) {
+            Ext.Msg.alert('Error', 'Failed to save the text file: ' + error.message);
         }
     }
 });

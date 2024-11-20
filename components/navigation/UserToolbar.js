@@ -49,6 +49,7 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                         }
                     }
                 },
+                '->', // Pushes the logout button to the right
                 {
                     xtype: 'button',
                     text: 'K-Shortcuts',
@@ -101,7 +102,6 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                         });
                     }
                 },
-                '->', // Pushes the logout button to the right
             ]
         });
 

@@ -7,7 +7,9 @@ Ext.define('FileManagement.components.viewers.ViewerFactory', {
         const filePath = record.get('_id');
         const fileName = record.get('name');
         const fileUrl = `http://localhost:5000/api/files/view/${filePath}`;
-        const isFolder = record.get('isFolder');
+        const mainPanel = Ext.getCmp('mainPanelRegion');
+
+        let viewer;
 
         if (fileType.startsWith('image/')) {
             return Ext.create('FileManagement.components.viewers.ImageViewer', {
@@ -15,17 +17,17 @@ Ext.define('FileManagement.components.viewers.ViewerFactory', {
                 title: `Image Viewer: ${fileName}`
             });
         } else if (fileType === 'application/pdf') {
-            return Ext.create('FileManagement.components.viewers.PDFViewer', {
+            viewer = Ext.create('FileManagement.components.viewers.PDFViewer', {
                 src: fileUrl,
                 title: `PDF Viewer: ${fileName}`
             });
         } else if (fileType.startsWith('application/vnd') || fileType.includes('msword')) {
-            return Ext.create('FileManagement.components.viewers.OfficeDocumentViewer', {
+            viewer = Ext.create('FileManagement.components.viewers.OfficeDocumentViewer', {
                 src: fileUrl,
                 title: `Office Document Viewer: ${fileName}`
             });
         } else if (fileType === 'text/plain') {
-            return Ext.create('FileManagement.components.viewers.TextViewer', {
+            viewer = Ext.create('FileManagement.components.viewers.TextViewer', {
                 src: fileUrl,
                 title: `Text Viewer: ${fileName}`
             });
@@ -36,8 +38,15 @@ Ext.define('FileManagement.components.viewers.ViewerFactory', {
                 title: `Zip File Contents: ${fileName}`
             });
         } else {
-            Ext.Msg.alert('Unsupported File Type', 'The selected file type is not supported for viewing.');
-            return null;
+            throw new Error('Unsupported File Type\', \'The selected file type is not supported for viewing: ' + fileType);
+            // Ext.Msg.alert('Unsupported File Type', 'The selected file type is not supported for viewing.');
+            // return null;
         }
+
+        viewer.show = function () {
+            mainPanel.add(viewer); // Add the viewer panel to the main region
+        }
+
+        return viewer;
     }
 });

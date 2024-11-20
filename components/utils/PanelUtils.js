@@ -4,7 +4,7 @@ Ext.define('FileManagement.components.utils.PanelUtils', {
     // Function to maximize the panel and bring it to the front
     maximizePanel: function(panel) {
         const mainPanelRegion = Ext.getCmp('mainPanelRegion');
-        if (mainPanelRegion && !panel.maximized) {
+        if (mainPanelRegion) {
             // Store the original position and size for restoration
             panel.originalConfig = {
                 x: panel.getX(),
@@ -74,6 +74,14 @@ Ext.define('FileManagement.components.utils.PanelUtils', {
             el.style.top = `${finalTop}px`;
             el.style.zIndex = ++window.highestZIndex;
         }
+
+        const iframePanels = Ext.ComponentQuery.query('pdfviewer');
+        iframePanels.forEach(panel => {
+            const el = panel.items.items[0].getEl();
+            if (el && el.style && 'pointerEvents' in el.style) {
+                delete el.style.pointerEvents;
+            }
+        });
     },
 
     // Close panel functionality
@@ -121,4 +129,18 @@ Ext.define('FileManagement.components.utils.PanelUtils', {
             this.minimizePanel(panel);
         }
     },
+
+    onDrag: function(panel) {
+        // Mask all panels with iframes
+        const iframePanels = Ext.ComponentQuery.query('pdfviewer');
+        iframePanels.forEach(panel => {
+            const el = panel.items.items[0];
+            if (el) {
+                // Add a mask to the panel's element
+                el.setStyle({
+                    pointerEvents: 'none'
+                });
+            }
+        });
+    }
 });

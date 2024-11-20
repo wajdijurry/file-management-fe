@@ -16,8 +16,6 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
             data: files // Populate the store with initial data
         });
 
-        let queueWindow = null; // Reference to the queue window
-
         const createQueueWindow = () => {
             return Ext.create('Ext.window.Window', {
                 title: 'File Queue',
@@ -52,12 +50,13 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
                 listeners: {
                     close: function () {
                         const queueButton = progressBarContainer.items.items[0];
-                        console.log(progressBarContainer.items);
                         queueButton.toggle(false); // Reset the toggle state of the button when the window is closed
                     }
                 }
             });
         };
+
+        let queueWindow = createQueueWindow(); // Reference to the queue window
 
         // Add the progress bar to the toolbar
         const progressBarContainer = userToolbar.add({
@@ -123,6 +122,7 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
 
         // Store references to the progress bar and store
         this.progressBars[id] = {
+            component: progressBarContainer,
             progressBar: progressBarContainer.items.items[2], // Correct progress bar reference
             store: fileQueueStore, // Store reference
             queueWindow: queueWindow // Store the window reference for cleanup
@@ -169,7 +169,11 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
             console.log(`Destroyed queue window for ID: ${id}`);
         }
 
-        // Destroy the progress bar component
+        if (progressBarData.component) {
+            progressBarData.component.destroy();
+        }
+
+        // Destroy the progress bar
         const progressBar = progressBarData.progressBar;
         if (progressBar) {
             progressBar.destroy();

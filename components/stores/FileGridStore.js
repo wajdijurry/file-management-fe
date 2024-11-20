@@ -63,6 +63,7 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
                             break
                         case 'text/plain':
                             iconClass += ' fa-duotone fa-solid fa-file-lines';
+                            break;
                         // Add more cases as needed
                         default:
                             iconClass += ' fa-duotone fa-solid fa-file'; // Default icon class
@@ -77,7 +78,6 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
             name: 'size',
             type: 'int',
             convert: function(value, record) {
-                if (record.get('isFolder')) return '';
                 if (value < 1024) return `${value} Bytes`;
                 else if (value < 1024 * 1024) return `${(value / 1024).toFixed(2)} KB`;
                 else if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MB`;

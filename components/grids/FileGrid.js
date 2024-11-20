@@ -13,9 +13,14 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     currentFolderPath: [], // Store the folder path segments
     userId: null, // Store the user ID to represent the root directory
 
+    // floating: true, // Enables ZIndexManager for bringToFront
+
     draggable: {
         onMouseUp: function() {
             FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
+        },
+        onDrag: function() {
+            FileManagement.components.utils.PanelUtils.onDrag(this.panel);
         }
     },
 
@@ -54,6 +59,13 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             FileManagement.components.utils.PanelUtils.destroy(panel);
 
             console.log('FileGrid and associated elements cleaned up successfully.');
+        },
+        afterrender: function (panel) {
+            // Ensure absolute positioning for free dragging
+            const el = panel.getEl();
+            if (el) {
+                el.setStyle('position', 'absolute');
+            }
         }
     },
 
@@ -78,6 +90,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     tools: [
         {
             type: 'maximize',
+            tooltip: 'Maximize',
             handler: function() {
                 const panel = this.up('panel'); // Correctly reference the panel
                 if (panel && !panel.maximized) {
@@ -724,74 +737,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             }
         });
     },
-
-    // downloadFileInChunks: async function (filePath, fileName, token, chunkSize) {
-    //     let start = 0;
-    //     const chunks = [];
-    //
-    //     // Add progress bar
-    //     FileManagement.components.utils.ProgressBarManager.addProgressBar('download', 'Downloading (0%)');
-    //
-    //     try {
-    //         // Fetch the file size from the backend
-    //         const metadataResponse = await fetch('http://localhost:5000/api/files/file-size', {
-    //             method: 'POST',
-    //             headers: {
-    //                 'Authorization': `Bearer ${token}`,
-    //                 'Content-Type': 'application/json',
-    //             },
-    //             body: JSON.stringify({ filePath }),
-    //         });
-    //
-    //         if (!metadataResponse.ok) {
-    //             throw new Error('Failed to fetch file metadata.');
-    //         }
-    //
-    //         const { fileSize } = await metadataResponse.json();
-    //
-    //         // Fetch file chunks
-    //         while (start < fileSize) {
-    //             const end = Math.min(start + chunkSize - 1, fileSize - 1);
-    //             const chunkResponse = await fetch('http://localhost:5000/api/files/download', {
-    //                 method: 'POST',
-    //                 headers: {
-    //                     'Authorization': `Bearer ${token}`,
-    //                     'Range': `bytes=${start}-${end}`,
-    //                     'Content-Type': 'application/json',
-    //                 },
-    //                 body: JSON.stringify({ filePath }),
-    //             });
-    //
-    //             if (!chunkResponse.ok) {
-    //                 throw new Error('Failed to download chunk.');
-    //             }
-    //
-    //             const chunk = await chunkResponse.arrayBuffer(); // Ensure raw data is received
-    //             chunks.push(chunk);
-    //             start += chunkSize;
-    //
-    //             const progress = Math.round((start / fileSize) * 100);
-    //             FileManagement.components.utils.ProgressBarManager.updateProgress('download', progress, `Downloading (${progress}%)`);
-    //         }
-    //
-    //         // Combine chunks into a single Blob
-    //         const combinedBuffer = this.concatenateChunks(chunks);
-    //
-    //         // Create a Blob and download the file
-    //         const blob = new Blob([combinedBuffer], { type: 'application/zip' });
-    //         const link = document.createElement('a');
-    //         link.href = window.URL.createObjectURL(blob);
-    //         link.download = fileName;
-    //         link.click();
-    //
-    //         FileManagement.components.utils.ProgressBarManager.updateProgress('download', 100, 'Download Complete');
-    //
-    //     } catch (error) {
-    //         Ext.Msg.alert('Error', `Download failed: ${error.message}`);
-    //     } finally {
-    //         FileManagement.components.utils.ProgressBarManager.removeProgressBar('download');
-    //     }
-    // },
 
     downloadFileInChunks: async function (filePath, fileName, token, chunkSize) {
         let start = 0;

@@ -1,6 +1,6 @@
 // PDFViewer.js
 Ext.define('FileManagement.components.viewers.PDFViewer', {
-    extend: 'Ext.window.Window',
+    extend: 'Ext.panel.Panel',
     xtype: 'pdfviewer',
 
     config: {
@@ -9,14 +9,63 @@ Ext.define('FileManagement.components.viewers.PDFViewer', {
     },
 
     title: 'PDF Viewer',
-    modal: true,
     layout: 'fit',
-    width: 800,
-    height: 600,
-    constrain: true,
     closable: true,
+    frame: true,
+    modal: true,
 
-    initComponent: function() {
+    width: 600, // Set a fixed width
+    height: 400, // Set a fixed height
+    x: 220,
+    y: 220,
+
+    draggable: {
+        onMouseUp: function() {
+            FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
+        }
+    },
+
+    resizable: {
+        constrain: true, // Enable constraint within a specified element
+        dynamic: true, // Updates size dynamically as resizing
+        minHeight: 300,
+        minWidth: 450,
+    },
+
+    header: {
+        listeners: {
+            dblclick: function (header) {
+                const panel = header.up('panel');
+                FileManagement.components.utils.PanelUtils.toggleMaximize(panel);
+            }
+        }
+    },
+
+    tools: [
+        {
+            type: 'maximize',
+            handler: function () {
+                const panel = this.up('panel');
+                if (panel && !panel.maximized) {
+                    FileManagement.components.utils.PanelUtils.maximizePanel(panel);
+                } else if (panel) {
+                    FileManagement.components.utils.PanelUtils.minimizePanel(panel);
+                }
+            }
+        }
+    ],
+
+    listeners: {
+        afterrender: function (panel) {
+            // Ensure absolute positioning for free dragging
+            const el = panel.getEl();
+            if (el) {
+                el.setStyle('z-index', ++window.highestZIndex); // Set a base z-index
+            }
+        }
+    },
+
+    initComponent: function () {
         // Initialize the PDF viewer with a placeholder component
         this.items = [{
             xtype: 'container',
@@ -30,7 +79,7 @@ Ext.define('FileManagement.components.viewers.PDFViewer', {
         this.loadPdfContent();
     },
 
-    loadPdfContent: async function() {
+    loadPdfContent: async function () {
         const token = FileManagement.helpers.Functions.getToken();
         const fileUrl = this.getSrc();
 
@@ -52,9 +101,6 @@ Ext.define('FileManagement.components.viewers.PDFViewer', {
                     style: 'width: 100%; height: 100%; border: none;'
                 }
             });
-
-            this.center(); // Center the window on the screen
-            this.show();
         } catch (error) {
             Ext.Msg.alert('Error', 'Failed to load the PDF file: ' + error.message);
             this.close();
