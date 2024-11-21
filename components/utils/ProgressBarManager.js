@@ -110,7 +110,7 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
                     flex: 1, // Allow dynamic resizing
                     width: 300,
                     maxWidth: 450, // Set maximum width
-                    cls: 'ellipsis-progress', // Add custom CSS class
+                    cls: 'ellipsis', // Add custom CSS class
                     listeners: {
                         boxready: function (progressbar) {
                             progressbar.updateLayout(); // Ensure proper layout rendering

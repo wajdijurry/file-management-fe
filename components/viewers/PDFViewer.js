@@ -14,6 +14,8 @@ Ext.define('FileManagement.components.viewers.PDFViewer', {
     frame: true,
     modal: true,
 
+    cls: "iframe-container",
+
     width: 600, // Set a fixed width
     height: 400, // Set a fixed height
     x: 220,

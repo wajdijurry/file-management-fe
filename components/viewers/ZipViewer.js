@@ -1,6 +1,6 @@
 // ZipViewer.js
 Ext.define('FileManagement.components.viewers.ZipViewer', {
-    extend: 'Ext.window.Window',
+    extend: 'Ext.panel.Panel',
     xtype: 'zipviewer',
 
     config: {
@@ -9,11 +9,50 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
     },
 
     title: 'Zip File Contents',
+    closable: true,
+    frame: true,
     modal: true,
-    layout: 'fit',
-    width: 400,
-    height: 300,
-    constrain: true,
+
+    width: 400, // Set a fixed width
+    height: 350, // Set a fixed height
+    x: 220,
+    y: 220,
+
+    style: {
+        zIndex: ++window.highestZIndex,
+    },
+
+    draggable: {
+        onMouseUp: function() {
+            FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
+        }
+    },
+
+    resizable: {
+        constrain: true, // Enable constraint within a specified element
+        dynamic: true, // Updates size dynamically as resizing
+        minHeight: 300,
+        minWidth: 450,
+    },
+
+    header: {
+        listeners: {
+            dblclick: function (header) {
+                const panel = header.up('panel');
+                FileManagement.components.utils.PanelUtils.toggleMaximize(panel);
+            }
+        }
+    },
+
+    listeners: {
+        afterrender: function (panel) {
+            // Ensure absolute positioning for free dragging
+            const el = panel.getEl();
+            if (el) {
+                el.setStyle('z-index', ++window.highestZIndex); // Set a base z-index
+            }
+        }
+    },
 
     zipStack: [], // Track nested zip entries for navigation
     currentZip: null, // Store the current zip instance
@@ -21,9 +60,9 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
     initComponent: async function() {
         const token = FileManagement.helpers.Functions.getToken();
         const zipFilePath = this.getSrc();
-        const zipWindow = this;
+        const zipPanel = this;
 
-        // Initialize grid panel and other items here to avoid rendering issues
+        // Initialize grid panel and other items
         this.items = [{
             xtype: 'gridpanel',
             store: {
@@ -37,9 +76,9 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
                     iconCls: 'fa fa-arrow-left',
                     tooltip: 'Go Back',
                     handler: function() {
-                        const previousZip = zipWindow.zipStack.pop();
+                        const previousZip = zipPanel.zipStack.pop();
                         if (previousZip) {
-                            zipWindow.processZipEntries(previousZip, zipWindow.fileName);
+                            zipPanel.processZipEntries(previousZip, zipPanel.fileName);
                         } else {
                             this.hide();
                         }
@@ -64,7 +103,7 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
             ],
             listeners: {
                 itemdblclick: function(grid, record) {
-                    zipWindow.onZipFileDoubleClick(record);
+                    zipPanel.onZipFileDoubleClick(record);
                 }
             }
         }];
@@ -85,7 +124,6 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
             this.processZipEntries(zip, this.getFileName());
         } catch (error) {
             Ext.Msg.alert('Error', `Failed to load the zip file: ${error.message}`);
-            zipWindow.close();
         }
     },
 
@@ -108,7 +146,7 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
         // Update the grid store with the new file list
         grid.getStore().loadData(fileList);
 
-        // Set the window title to reflect the opened zip file's name
+        // Set the panel title to reflect the opened zip file's name
         this.setTitle('Contents of: ' + parentPath);
 
         // Show or hide the Go Back button based on the stack
@@ -118,7 +156,6 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
         this.currentZip = zip;
     },
 
-    // Handles double-click on zip files within the zip viewer to navigate into nested zips
     onZipFileDoubleClick: function(record) {
         const fileName = record.get('name');
         const zipEntry = this.currentZip.file(fileName);

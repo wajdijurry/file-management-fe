@@ -12,14 +12,14 @@ Ext.define('FileManagement.components.viewers.ViewerFactory', {
         let viewer;
 
         if (fileType.startsWith('image/')) {
-            return Ext.create('FileManagement.components.viewers.ImageViewer', {
+            viewer = Ext.create('FileManagement.components.viewers.ImageViewer', {
                 src: fileUrl,
-                title: `Image Viewer: ${fileName}`
+                title: `Image: ${fileName}`
             });
         } else if (fileType === 'application/pdf') {
             viewer = Ext.create('FileManagement.components.viewers.PDFViewer', {
                 src: fileUrl,
-                title: `PDF Viewer: ${fileName}`
+                title: `PDF: ${fileName}`
             });
         } else if (fileType.startsWith('application/vnd') || fileType.includes('msword')) {
             viewer = Ext.create('FileManagement.components.viewers.OfficeDocumentViewer', {
@@ -32,15 +32,14 @@ Ext.define('FileManagement.components.viewers.ViewerFactory', {
                 title: `Text Viewer: ${fileName}`
             });
         } else if (fileType === 'application/zip') {
-            return Ext.create('FileManagement.components.viewers.ZipViewer', {
+            viewer = Ext.create('FileManagement.components.viewers.ZipViewer', {
                 src: fileUrl,
                 fileName: fileName,
                 title: `Zip File Contents: ${fileName}`
             });
         } else {
+            Ext.Msg.alert('Unsupported File Type', 'The selected file type is not supported for viewing.');
             throw new Error('Unsupported File Type\', \'The selected file type is not supported for viewing: ' + fileType);
-            // Ext.Msg.alert('Unsupported File Type', 'The selected file type is not supported for viewing.');
-            // return null;
         }
 
         viewer.show = function () {

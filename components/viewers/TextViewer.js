@@ -58,6 +58,16 @@ Ext.define('FileManagement.components.viewers.TextViewer', {
         }
     ],
 
+    listeners: {
+        afterrender: function (panel) {
+            // Ensure absolute positioning for free dragging
+            const el = panel.getEl();
+            if (el) {
+                el.setStyle('z-index', ++window.highestZIndex); // Set a base z-index
+            }
+        }
+    },
+
     initComponent: function () {
         // Define items with the htmleditor for text editing
         this.items = [{

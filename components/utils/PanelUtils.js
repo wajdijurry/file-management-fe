@@ -132,7 +132,7 @@ Ext.define('FileManagement.components.utils.PanelUtils', {
 
     onDrag: function(panel) {
         // Mask all panels with iframes
-        const iframePanels = Ext.ComponentQuery.query('pdfviewer');
+        const iframePanels = Ext.ComponentQuery.query('panel[cls~=iframe-container]');
         iframePanels.forEach(panel => {
             const el = panel.items.items[0];
             if (el) {

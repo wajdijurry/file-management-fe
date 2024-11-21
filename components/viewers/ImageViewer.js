@@ -1,23 +1,79 @@
 // ImageViewer.js
 Ext.define('FileManagement.components.viewers.ImageViewer', {
-    extend: 'Ext.window.Window',
+    extend: 'Ext.panel.Panel',
     xtype: 'imageviewer',
 
     config: {
         src: null
     },
 
+    cls: '',
+
     title: 'Image Viewer',
-    modal: true,
-    draggable: true,
     layout: 'fit',
-    autoShow: true,
-    constrain: true,
+    closable: true,
+    frame: true,
+    modal: true,
+
+    width: 600, // Set a fixed width
+    height: 400, // Set a fixed height
+    x: 220,
+    y: 220,
+
+    style: {
+        zIndex: ++window.highestZIndex,
+    },
+
+    draggable: {
+        onMouseUp: function() {
+            FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
+        }
+    },
+
+    resizable: {
+        constrain: true, // Enable constraint within a specified element
+        dynamic: true, // Updates size dynamically as resizing
+        minHeight: 300,
+        minWidth: 450,
+    },
+
+    header: {
+        listeners: {
+            dblclick: function (header) {
+                const panel = header.up('panel');
+                FileManagement.components.utils.PanelUtils.toggleMaximize(panel);
+            }
+        }
+    },
+
+    tools: [
+        {
+            type: 'maximize',
+            handler: function () {
+                const panel = this.up('panel');
+                if (panel && !panel.maximized) {
+                    FileManagement.components.utils.PanelUtils.maximizePanel(panel);
+                } else if (panel) {
+                    FileManagement.components.utils.PanelUtils.minimizePanel(panel);
+                }
+            }
+        }
+    ],
+
+    listeners: {
+        afterrender: function (panel) {
+            // Ensure absolute positioning for free dragging
+            const el = panel.getEl();
+            if (el) {
+                el.setStyle('z-index', ++window.highestZIndex); // Set a base z-index
+            }
+        }
+    },
 
     initComponent: function() {
         const token = FileManagement.helpers.Functions.getToken();
         const imagePath = this.getSrc();
-        const imageWindow = this;
+        const viewerPanel = this;
 
         this.items = [{
             xtype: 'image',
@@ -35,33 +91,25 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
                         image.src = objectURL;
                         image.onload = () => {
                             const { width: naturalWidth, height: naturalHeight } = image;
-                            imageWindow.setWidth(naturalWidth);
-                            imageWindow.setHeight(naturalHeight);
-
                             const screenWidth = window.innerWidth;
                             const screenHeight = window.innerHeight;
 
-                            imageWindow.setMaxWidth(screenWidth * 0.9);
-                            imageWindow.setMaxHeight(screenHeight * 0.9);
-                            imageWindow.setMinWidth(300);
-                            imageWindow.setMinHeight(200);
+                            // Adjust panel size based on image dimensions
+                            viewerPanel.setSize(
+                                Math.min(naturalWidth, screenWidth * 0.9),
+                                Math.min(naturalHeight, screenHeight * 0.9)
+                            );
 
-                            imageWindow.show();
-                            imageWindow.center();
+                            // Set minimum dimensions for usability
+                            viewerPanel.setMinWidth(300);
+                            viewerPanel.setMinHeight(200);
                         };
                     } catch (error) {
                         Ext.Msg.alert('Error', 'Failed to load the image.');
-                        imageWindow.close();
                     }
                 }
             }
         }];
-
-        this.listeners = {
-            close: function () {
-                this.destroy();
-            }
-        };
 
         this.callParent();
     }

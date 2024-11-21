@@ -2,7 +2,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     extend: 'Ext.grid.Panel',
     alias: 'widget.filegrid',
 
-    title: 'File Grid',
+    title: 'Files Explorer',
 
     frame: true,
     closable: true,
@@ -638,8 +638,29 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         if (record.get('isFolder')) {
             this.loadFolderContents(record.get('name'), record.get('_id'));
         } else {
+            const fileId = record.get('_id'); // Unique identifier for the file
+            const mainPanel = Ext.getCmp('mainPanelRegion'); // Parent container reference
+
+            if (!mainPanel) {
+                Ext.Msg.alert('Error', 'Main panel not found.');
+                return;
+            }
+
+            // Check if a viewer for this file is already open
+            const existingViewer = mainPanel.items.findBy(item => item.fileId === fileId);
+            if (existingViewer) {
+                existingViewer.setStyle({ zIndex: ++window.highestZIndex });
+                return;
+            }
+
+            // Create and add the new viewer panel
             const viewer = FileManagement.components.viewers.ViewerFactory.createViewer(record);
-            if (viewer) viewer.show();
+            if (viewer) {
+                viewer.fileId = fileId; // Tag the panel with the file ID for tracking
+                viewer.show(); // Add the viewer to the main panel
+
+                Ext.ComponentQuery.query('userToolbar')[0].addPanelToggleButton(viewer, record.get('name'), record.get('icon'));
+            }
         }
     },
 

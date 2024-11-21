@@ -57,6 +57,16 @@ Ext.define('FileManagement.components.viewers.OfficeDocumentViewer', {
         }
     ],
 
+    listeners: {
+        afterrender: function (panel) {
+            // Ensure absolute positioning for free dragging
+            const el = panel.getEl();
+            if (el) {
+                el.setStyle('z-index', ++window.highestZIndex); // Set a base z-index
+            }
+        }
+    },
+
     initComponent: function () {
         const filePath = this.getSrc();
         const viewerUrl = `https://docs.google.com/gview?url=${encodeURIComponent(filePath)}&embedded=true`;

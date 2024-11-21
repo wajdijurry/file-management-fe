@@ -23,7 +23,7 @@
     cursor: crosshair;
 }
 
-.ellipsis-progress .x-progress-text {
+.ellipsis .x-progress-text {
     overflow: hidden;
     white-space: nowrap;
     text-overflow: ellipsis;
