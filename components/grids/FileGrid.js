@@ -16,11 +16,11 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     // floating: true, // Enables ZIndexManager for bringToFront
 
     draggable: {
-        onMouseUp: function() {
-            FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
+        onMouseUp: function(e, panel) {
+            FileManagement.components.utils.PanelUtils.onMouseUp(panel ?? this.panel);
         },
-        onDrag: function() {
-            FileManagement.components.utils.PanelUtils.onDrag(this.panel);
+        onDrag: function(e, panel) {
+            FileManagement.components.utils.PanelUtils.onDrag(panel ?? this.panel);
         }
     },
 
@@ -292,6 +292,29 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                 filePaths = filePaths.map(path => path.split('/').slice(1).join('/'));
                                 zipFileName = zipFileName.endsWith('.zip') ? zipFileName : `${zipFileName}.zip`
 
+                                const abortController = new AbortController();
+                                const signal = abortController.signal;
+
+                                // const progressId = `compression-progress-${Date.now()}`;
+                                FileManagement.components.utils.ProgressBarManager.addProgressBar('compression', `Compressing ${zipFileName}`, [], function () {
+                                    abortController.abort(); // Abort ongoing requests
+                                    // Notify the backend to stop the compression process
+                                    fetch('http://localhost:5000/api/files/stop-compression', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({
+                                            zipFileName,
+                                            folder: grid.currentFolder,
+                                            parentId: grid.currentFolderId
+                                        })
+                                    }).catch(() => {
+                                        Ext.Msg.alert('Error', 'Failed to cancel compression on the server.');
+                                    });
+                                }, false);
+
                                 try {
                                     const response = await fetch('http://localhost:5000/api/files/compress', {
                                         method: 'POST',
@@ -305,11 +328,14 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                             folder: grid.currentFolder,
                                             parentId: grid.currentFolderId
                                         }),
+                                        signal
                                     });
 
                                     if (!response.ok) {
                                         throw new Error('Failed to create ZIP file.');
                                     }
+
+                                    FileManagement.components.utils.ProgressBarManager.removeProgressBar('compression');
 
                                     const zipFile = await response.json();
                                     let zipFilePath = zipFile.file.path;
@@ -317,7 +343,12 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                     // Download the ZIP in chunks
                                     await grid.downloadFileInChunks(zipFilePath, `${zipFileName}`, token, 2 * 1024 * 1024); // 10 MB chunks
                                 } catch (error) {
-                                    Ext.Msg.alert('Error', `Failed to download ZIP: ${error.message}`);
+                                    if (error.name === 'AbortError') {
+                                        console.log('Compression aborted by user.');
+                                    } else {
+                                        console.error('Error during compression:', error);
+                                        Ext.Msg.alert('Error', `Failed to download ZIP: ${error.message}`);
+                                    }
                                 }
                             }
                         });
@@ -460,6 +491,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         // Add the bottom toolbar (bbar) to display the breadcrumb navigation
         Ext.apply(me, {
             bbar: {
+                overflowHandler: 'scroller',
                 items: [
                     {
                         xtype: 'tbtext',
@@ -469,7 +501,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                         xtype: 'toolbar',
                         itemId: 'breadcrumbToolbar',
                         border: 0,
-                        items: []
+                        items: [],
                     }
                 ]
             }
@@ -721,42 +753,103 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         listeners: {
             drop: function(node, data, overModel, dropPosition, eOpts) {
                 // Check if the target is a folder
-                if (overModel.get('isFolder')) {
+                // if (overModel.get('isFolder')) {
                     const draggedRecords = data.records;
-                    const targetFolderId = overModel.get('_id');
+                    const targetId = overModel.get('_id');
 
                     // Call the moveItem function for each dragged record
-                    draggedRecords.forEach(record => {
-                        this.up('filegrid').moveItem(record, targetFolderId);
-                    });
-                } else {
-                    Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder.');
-                }
+                    // draggedRecords.forEach(record => {
+                    //     this.up('filegrid').moveItem(record, targetFolderId);
+                    // });
+
+                    this.up('filegrid').moveItem(draggedRecords, overModel);
+                // } else {
+                //     Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder.');
+                // }
             }
         }
     },
 
     // Method to handle moving the item to another folder
-    moveItem: function(record, targetFolderId) {
-        const itemId = record.get('_id');
+    // moveItem: function(record, targetFolderId) {
+    //     const itemId = record.get('_id');
+    //
+    //     // Call the backend to update the folder location
+    //     Ext.Ajax.request({
+    //         url: `http://localhost:5000/api/files/move`,
+    //         method: 'POST',
+    //         jsonData: {
+    //             itemId: itemId,
+    //             targetFolderId: targetFolderId
+    //         },
+    //         success: () => {
+    //             Ext.Msg.alert('Success', 'Item moved successfully.');
+    //             this.getStore().reload(); // Refresh the grid after moving
+    //         },
+    //         failure: (response) => {
+    //             const responseText = Ext.decode(response.responseText);
+    //             Ext.Msg.alert('Error', responseText.message || 'Failed to move the item.');
+    //         }
+    //     });
+    // },
 
-        // Call the backend to update the folder location
-        Ext.Ajax.request({
-            url: `http://localhost:5000/api/files/move`,
-            method: 'POST',
-            jsonData: {
-                itemId: itemId,
-                targetFolderId: targetFolderId
+    moveItem: function(selectedItems, targetRecord) {
+        if (!targetRecord) {
+            Ext.Msg.alert('Error', 'Please select a target folder or ZIP file.');
+            return;
+        }
+
+        const isTargetZip = targetRecord.get('name').endsWith('.zip'); // Check if the target is a ZIP file
+        const targetId = targetRecord.get('_id'); // Get the target folder/ZIP ID
+        const targetName = targetRecord.get('name');
+
+        // Collect the IDs of selected files/folders to be moved
+        const itemIds = selectedItems.map(item => item.get('_id'));
+        const grid = this.up('grid');
+
+        // Confirm the move action
+        Ext.Msg.confirm(
+            'Confirm Move',
+            `Are you sure you want to move the selected items to ${isTargetZip ? 'ZIP file: ' + targetName : 'folder: ' + targetName}?`,
+            function(choice) {
+                if (choice === 'yes') {
+                    // Show a loading mask
+                    const mask = new Ext.LoadMask({
+                        msg: 'Moving items...',
+                        target: this
+                    });
+                    mask.show();
+
+                    // Make the API call to move the items
+                    Ext.Ajax.request({
+                        url: 'http://localhost:5000/api/files/move', // Backend endpoint
+                        method: 'POST',
+                        jsonData: {
+                            itemIds: itemIds,
+                            targetId: targetId,
+                            isTargetZip: isTargetZip // Let the backend know if the target is a ZIP
+                        },
+                        success: function(response) {
+                            mask.hide();
+
+                            const res = Ext.decode(response.responseText);
+                            if (res.success) {
+                                Ext.Msg.alert('Success', 'Items moved successfully.');
+                                this.getStore().reload(); // Reload the store data
+                            } else {
+                                Ext.Msg.alert('Error', res.message || 'Failed to move items.');
+                            }
+                        },
+                        failure: function(response) {
+                            mask.hide();
+                            Ext.Msg.alert('Error', 'An error occurred while moving the items.');
+                        },
+                        scope: this
+                    });
+                }
             },
-            success: () => {
-                Ext.Msg.alert('Success', 'Item moved successfully.');
-                this.getStore().reload(); // Refresh the grid after moving
-            },
-            failure: (response) => {
-                const responseText = Ext.decode(response.responseText);
-                Ext.Msg.alert('Error', responseText.message || 'Failed to move the item.');
-            }
-        });
+            this
+        );
     },
 
     downloadFileInChunks: async function (filePath, fileName, token, chunkSize) {

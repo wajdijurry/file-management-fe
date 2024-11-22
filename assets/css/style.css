@@ -32,3 +32,35 @@
     text-align: center; /* Center-align the text */
     line-height: 20px; /* Adjust line height for vertical centering */
 }
+
+.snap-zone {
+    border: 2px dashed gray;
+    background-color: rgba(0, 0, 0, 0); /* Initially invisible */
+}
+
+.snap-zone.invisible {
+    visibility: hidden;
+}
+
+.highlight-region {
+    background-color: #cad6e9; /* Highlighted blue */
+    border: 1px dotted darkgray;
+    visibility: visible;
+}
+
+.edge-highlight {
+    background-color: rgba(255, 0, 0, 0.2); /* Light red for edge proximity */
+    border: 2px solid red;
+}
+
+.grayed-out {
+    opacity: 0.5;
+    /*pointer-events: none; !* Prevent interaction with grayed-out panels *!*/
+}
+
+.active-panel {
+    opacity: 1;
+    z-index: 9999; /* Ensure active panel is on top */
+}
+
+

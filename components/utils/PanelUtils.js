@@ -142,5 +142,84 @@ Ext.define('FileManagement.components.utils.PanelUtils', {
                 });
             }
         });
+    },
+
+    applyZIndexHighlighting: function(container) {
+        // Function to handle highlighting logic
+        const updateHighlighting = (activePanel) => {
+            container.items.each(panel => {
+                if (panel instanceof Ext.panel.Panel) {
+                    if (panel === activePanel) {
+                        panel.removeCls('grayed-out');
+                        panel.addCls('active-panel');
+                        panel.layout.zIndex = ++window.highestZIndex;
+                    } else {
+                        panel.removeCls('active-panel');
+                        panel.addCls('grayed-out');
+                    }
+                }
+            });
+        };
+
+        // Add listeners to all existing panels
+        container.items.each(panel => {
+            if (panel instanceof Ext.panel.Panel) {
+                panel.on('afterrender', () => {
+                    // Highlight when the panel is clicked
+                    panel.getEl().on('mousedown', () => {
+                        updateHighlighting(panel);
+                    });
+
+                    // Ensure grayout is updated when a panel is closed
+                    panel.on('close', () => {
+                        const remainingPanels = container.query('panel:not(.x-hidden-display)');
+                        if (remainingPanels.length > 0) {
+                            updateHighlighting(remainingPanels[0]); // Highlight the first remaining panel
+                        } else {
+                            container.items.each(p => p.removeCls('grayed-out')); // Remove grayout if no panels left
+                        }
+                    });
+                });
+            }
+        });
+
+        // Handle dynamically added panels
+        container.on('add', (parent, panel) => {
+            if (panel instanceof Ext.panel.Panel) {
+                panel.on('afterrender', () => {
+                    panel.getEl().on('mousedown', () => {
+                        updateHighlighting(panel);
+                    });
+
+                    panel.on('close', () => {
+                        const remainingPanels = container.query('panel:not(.x-hidden-display)');
+                        if (remainingPanels.length > 0) {
+                            updateHighlighting(remainingPanels[0]);
+                        } else {
+                            container.items.each(p => p.removeCls('grayed-out'));
+                        }
+                    });
+                });
+            }
+        });
+
+        // Initial highlight
+        if (container.items.length > 0) {
+            updateHighlighting(container.items.getAt(0)); // Highlight the first panel
+        }
+    },
+
+    updateZIndexHighlighting: function(container, activePanel) {
+        container.items.each(panel => {
+            if (panel instanceof Ext.panel.Panel) {
+                if (panel === activePanel) {
+                    panel.removeCls('grayed-out');
+                    panel.addCls('active-panel');
+                } else {
+                    panel.removeCls('active-panel');
+                    panel.addCls('grayed-out');
+                }
+            }
+        });
     }
 });

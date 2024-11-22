@@ -3,7 +3,7 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
 
     progressBars: {},
 
-    addProgressBar: function (id, text, files, cancelCallback, showQueueButton = true) {
+    addProgressBar: function (id, text, files = [], cancelCallback = null, showQueueButton = true) {
         const userToolbar = Ext.getCmp('userToolbar');
         if (this.progressBars[id]) {
             console.warn(`Progress bar with ID "${id}" already exists.`);

@@ -123,6 +123,22 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
         const token = FileManagement.helpers.Functions.getToken();
         const fileGrid = Ext.ComponentQuery.query('filegrid')[0];
 
+        // Query server for already uploaded chunks
+        const response = await fetch(`http://localhost:5000/api/files/upload/status?filename=${encodeURIComponent(file.name)}`, {
+            method: 'GET',
+            headers: {
+                'Authorization': `Bearer ${token}`
+            }
+        });
+
+        if (response.ok) {
+            const uploadedChunks = await response.json();
+            if (uploadedChunks && uploadedChunks.length) {
+                console.log(`Resuming upload for ${file.name} from chunk ${uploadedChunks.length + 1}`);
+                start = uploadedChunks.length * chunkSize; // Skip already uploaded chunks
+            }
+        }
+
         while (start < file.size) {
             const end = Math.min(start + chunkSize, file.size);
             const chunk = file.slice(start, end);
@@ -134,7 +150,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
             formData.append('currentChunk', Math.floor(start / chunkSize) + 1);
             formData.append('totalChunks', totalChunks);
 
-            const response = await fetch('http://localhost:5000/api/files/upload', {
+            const uploadResponse = await fetch('http://localhost:5000/api/files/upload', {
                 method: 'POST',
                 body: formData,
                 headers: {
@@ -143,7 +159,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
                 signal: abortSignal // Attach AbortController signal
             });
 
-            if (!response.ok) {
+            if (!uploadResponse.ok) {
                 throw new Error(`Failed to upload chunk ${start} - ${end}`);
             }
 
@@ -152,4 +168,40 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
             FileManagement.components.utils.ProgressBarManager.updateProgress(progressId, progress, `Uploading ${file.name} (${progress}%)`);
         }
     }
+
+    // uploadFileInChunks: async function (file, progressId, chunkSize, abortSignal) {
+    //     let start = 0;
+    //     const totalChunks = Math.ceil(file.size / chunkSize);
+    //     const token = FileManagement.helpers.Functions.getToken();
+    //     const fileGrid = Ext.ComponentQuery.query('filegrid')[0];
+    //
+    //     while (start < file.size) {
+    //         const end = Math.min(start + chunkSize, file.size);
+    //         const chunk = file.slice(start, end);
+    //
+    //         const formData = new FormData();
+    //         formData.append('folderId', fileGrid.currentFolderId || ''); // Set folder in FormData
+    //         formData.append('chunk', chunk);
+    //         formData.append('filename', file.name);
+    //         formData.append('currentChunk', Math.floor(start / chunkSize) + 1);
+    //         formData.append('totalChunks', totalChunks);
+    //
+    //         const response = await fetch('http://localhost:5000/api/files/upload', {
+    //             method: 'POST',
+    //             body: formData,
+    //             headers: {
+    //                 'Authorization': `Bearer ${token}` // Add token to headers
+    //             },
+    //             signal: abortSignal // Attach AbortController signal
+    //         });
+    //
+    //         if (!response.ok) {
+    //             throw new Error(`Failed to upload chunk ${start} - ${end}`);
+    //         }
+    //
+    //         start = end;
+    //         const progress = Math.round((start / file.size) * 100);
+    //         FileManagement.components.utils.ProgressBarManager.updateProgress(progressId, progress, `Uploading ${file.name} (${progress}%)`);
+    //     }
+    // }
 });

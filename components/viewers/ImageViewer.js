@@ -25,8 +25,11 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
     },
 
     draggable: {
-        onMouseUp: function() {
-            FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
+        onMouseUp: function(e, panel) {
+            FileManagement.components.utils.PanelUtils.onMouseUp(panel ?? this.panel);
+        },
+        onDrag: function(e, panel) {
+            FileManagement.components.utils.PanelUtils.onDrag(panel ?? this.panel);
         }
     },
 
@@ -67,6 +70,12 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
             if (el) {
                 el.setStyle('z-index', ++window.highestZIndex); // Set a base z-index
             }
+
+            const mainPanelRegion = Ext.getCmp('mainPanelRegion');
+            const mainPanelRegionBox = mainPanelRegion.getBox();
+
+            panel.maxWidth = mainPanelRegionBox.width * 2 / 3;
+            panel.maxHeight = mainPanelRegionBox.height * 2 / 3;
         }
     },
 

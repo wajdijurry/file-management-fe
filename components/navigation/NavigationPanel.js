@@ -6,6 +6,9 @@ Ext.define('FileManagement.components.navigation.NavigationPanel', {
     layout: 'fit',
     collapsible: true,
 
+    minWidth: 200,
+    maxWidth: 300,
+
     requires: [
         'FileManagement.components.stores.PanelListStore'
     ],
@@ -48,7 +51,9 @@ Ext.define('FileManagement.components.navigation.NavigationPanel', {
         }
 
         new Ext.util.DelayedTask(function(){
-            const visiblePanels = mainPanelRegion.items.getRange().filter(panel => panel.isVisible());
+            const visiblePanels = mainPanelRegion.items.getRange().filter(
+                panel => panel.isVisible() && panel.itemId !== 'snapassist'
+            );
 
             // Map over the array of visible panels to create data objects
             const data = visiblePanels.map(panel => ({

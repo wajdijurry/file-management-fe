@@ -22,8 +22,11 @@ Ext.define('FileManagement.components.viewers.PDFViewer', {
     y: 220,
 
     draggable: {
-        onMouseUp: function() {
-            FileManagement.components.utils.PanelUtils.onMouseUp(this.panel);
+        onMouseUp: function(e, panel) {
+            FileManagement.components.utils.PanelUtils.onMouseUp(panel ?? this.panel);
+        },
+        onDrag: function(e, panel) {
+            FileManagement.components.utils.PanelUtils.onDrag(panel ?? this.panel);
         }
     },
 

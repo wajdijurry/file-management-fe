@@ -24,6 +24,7 @@ Ext.application({
         'FileManagement.helpers.Functions',
         'FileManagement.components.utils.SocketManager',
         'FileManagement.components.utils.ProgressBarManager',
+        'FileManagement.components.utils.SnapAssist',
     ],
 
     launch: function() {
@@ -33,6 +34,9 @@ Ext.application({
             // Create the viewport with navigation and main panels
             Ext.create('Ext.container.Viewport', {
                 layout: 'border',
+                style: {
+                    backgroundColor: '#eaedf1',
+                },
                 items: [
                     {
                         region: 'south',
@@ -53,6 +57,18 @@ Ext.application({
                         listeners: {
                             afterrender: function (container) {
 
+                                const snapAssist = Ext.create('FileManagement.components.utils.SnapAssist');
+                                container.add(snapAssist); // Add SnapAssist to the region
+                                snapAssist.initialize(container); // Initialize SnapAssist with the parent container
+
+                                new Ext.util.DelayedTask(function() {
+                                    snapAssist.initialize(container);
+
+                                    if (snapAssist) {
+                                        snapAssist.setSize(container.getWidth(), container.getHeight()); // Set initial size
+                                    }
+                                }).delay(300);
+
                                 let currentIndex = 0; // Initialize index for panel switching
                                 window.highestZIndex = 1; // Start z-index tracking
 
@@ -63,7 +79,11 @@ Ext.application({
 
                                         // Get all visible panels in mainPanelRegion, excluding the navigation panel
                                         // const panels = container.items.filter(panel => panel.isVisible() && panel.itemId !== 'navigationPanel');
-                                        const panels = container.items.getRange().filter(panel => panel.isVisible() && panel.itemId !== 'navigationPanel');
+                                        const panels = container.items.getRange().filter(
+                                            panel => panel.isVisible()
+                                                && panel.itemId !== 'navigationPanel'
+                                                && panel.itemId !== 'snapassist'
+                                        );
 
                                         if (panels.length === 0) return;
 
@@ -88,12 +108,16 @@ Ext.application({
                                 if (navPanel) {
                                     navPanel.refreshPanelList();
                                 }
+
+                                FileManagement.components.utils.PanelUtils.applyZIndexHighlighting(container);
                             },
-                            add: function () {
+                            add: function (parent, panel) {
                                 const navPanel = Ext.ComponentQuery.query('navigationpanel')[0];
                                 if (navPanel) {
                                     navPanel.refreshPanelList();
                                 }
+
+                                FileManagement.components.utils.PanelUtils.updateZIndexHighlighting(parent, panel);
                             },
                             remove: function () {
                                 const navPanel = Ext.ComponentQuery.query('navigationpanel')[0];
@@ -109,7 +133,7 @@ Ext.application({
                         // Initialize WebSocket connection
                         FileManagement.components.utils.SocketManager.initSocket();
                     }
-                }
+                },
             });
         };
 
