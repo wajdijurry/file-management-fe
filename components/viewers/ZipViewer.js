@@ -1,4 +1,3 @@
-// ZipViewer.js
 Ext.define('FileManagement.components.viewers.ZipViewer', {
     extend: 'Ext.panel.Panel',
     xtype: 'zipviewer',
@@ -15,6 +14,7 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
 
     width: 400, // Set a fixed width
     height: 350, // Set a fixed height
+    layout: 'fit', // Ensure the gridpanel fills the panel
     x: 220,
     y: 220,
 
@@ -47,6 +47,20 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
         }
     },
 
+    tools: [
+        {
+            type: 'maximize',
+            handler: function () {
+                const panel = this.up('panel');
+                if (panel && !panel.maximized) {
+                    FileManagement.components.utils.PanelUtils.maximizePanel(panel);
+                } else if (panel) {
+                    FileManagement.components.utils.PanelUtils.minimizePanel(panel);
+                }
+            }
+        }
+    ],
+
     listeners: {
         afterrender: function (panel) {
             // Ensure absolute positioning for free dragging
@@ -72,6 +86,7 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
                 fields: ['name'],
                 data: [] // Initialize with empty data, populated later in showZipContents
             },
+            scrollable: true, // Enable vertical scrolling
             columns: [{ text: 'File Name', dataIndex: 'name', flex: 1 }],
             tbar: [
                 {

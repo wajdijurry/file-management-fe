@@ -3,33 +3,17 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
     xtype: 'userToolbar',
     id: 'userToolbar',
     cls: 'x-toolbar-classic',
-    style: { position: 'sticky', bottom: 0, zIndex: 1000 },
+    style: {
+        // position: 'sticky',
+        bottom: '0px !important',
+        zIndex: 1000,
+        height: '28px !important',
+        display: 'flex',
+        alignItems: 'center'
+    },
 
     openedPanels: {},
-    index: 3,
-
-    // addPanelToggleButton: (panel, label) => {
-    //     const me = this;
-    //     // Dynamically add a toggle button for the panel
-    //     // Track the panel and its button
-    //     me.openedPanels[panel.id] = me.insert(me.index, {
-    //         xtype: 'button',
-    //         text: label,
-    //         enableToggle: true,
-    //         pressed: true,
-    //         toggleHandler: function (btn, pressed) {
-    //             const mainPanelRegion = Ext.getCmp('mainPanelRegion');
-    //             if (pressed) {
-    //                 mainPanelRegion.setActiveItem(panel); // Activate the panel
-    //             } else {
-    //                 mainPanelRegion.remove(panel, false); // Deactivate without destroying
-    //             }
-    //         }
-    //     });
-    //     panel.on('destroy', () => me.removePanelToggleButton(panel));
-    //
-    //     me.index++;
-    // },
+    index: 1,
 
     removePanelToggleButton: (panel) => {
         // Remove the toggle button associated with the panel
@@ -53,33 +37,79 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                     xtype: 'tbseparator'
                 },
                 {
-                    xtype: 'button',
-                    text: 'Files Explorer',
-                    iconCls: 'fa fa-folder-open fa-2xs',
-                    enableToggle: true,
-                    toggleHandler: function(button, pressed) {
-                        const mainPanelRegion = Ext.getCmp('mainPanelRegion');
+                    xtype: 'container',
+                    itemId: 'openedPanels',
+                    id: 'openedPanels',
+                    layout: {
+                        type: 'hbox',
+                        align: 'stretch'
+                    },
+                    cls: 'x-toolbar-classic',
+                    maxWidth: 700,
+                    items: [
+                        {
+                            xtype: 'button',
+                            text: 'Files Explorer',
+                            iconCls: 'fa fa-folder-open fa-2xs',
+                            enableToggle: true,
+                            padding: 1,
+                            toggleHandler: function(button, pressed) {
+                                const mainPanelRegion = Ext.getCmp('mainPanelRegion');
 
-                        if (pressed) {
-                                const fileGridStore = Ext.create('FileManagement.components.stores.FileGridStore');
-                                let fileGridPanel = Ext.create('FileManagement.components.grids.FileGrid', {
-                                    xtype: 'filegrid',
-                                    store: fileGridStore,
-                                    x: 210,
-                                    y: 250,
-                                    refBottomToolbarButton: button,
-                                    currentFolderPath: [],
-                                    currentFolder: null,
-                                    currentFolderId: null
-                                });
-                                mainPanelRegion.add(fileGridPanel);
-                        } else {
-                            // Destroy the panel if it exists when toggling off
-                            let fileGridPanel = Ext.ComponentQuery.query('filegrid')[0];
+                                if (pressed) {
+                                    const fileGridStore = Ext.create('FileManagement.components.stores.FileGridStore');
+                                    let fileGridPanel = Ext.create('FileManagement.components.grids.FileGrid', {
+                                        xtype: 'filegrid',
+                                        store: fileGridStore,
+                                        x: 210,
+                                        y: 250,
+                                        refBottomToolbarButton: button,
+                                        currentFolderPath: [],
+                                        currentFolder: null,
+                                        currentFolderId: null
+                                    });
+                                    mainPanelRegion.add(fileGridPanel);
+                                } else {
+                                    // Destroy the panel if it exists when toggling off
+                                    let fileGridPanel = Ext.ComponentQuery.query('filegrid')[0];
 
-                            if (fileGridPanel) {
-                                fileGridPanel.destroy();
+                                    if (fileGridPanel) {
+                                        fileGridPanel.destroy();
+                                    }
+                                }
                             }
+                        }
+                    ],
+                    listeners: {
+                        afterrender: function(container) {
+                            // Enable drag-to-scroll
+                            let isMouseDown = false;
+                            let startX;
+                            let scrollLeft;
+
+                            const el = Ext.get('openedPanels-innerCt').dom;
+
+                            el.addEventListener('mousedown', (e) => {
+                                isMouseDown = true;
+                                startX = e.pageX - el.offsetLeft;
+                                scrollLeft = el.scrollLeft;
+                            });
+
+                            el.addEventListener('mouseleave', () => {
+                                isMouseDown = false;
+                            });
+
+                            el.addEventListener('mouseup', () => {
+                                isMouseDown = false;
+                            });
+
+                            el.addEventListener('mousemove', (e) => {
+                                if (!isMouseDown) return;
+                                e.preventDefault();
+                                const x = e.pageX - el.offsetLeft;
+                                const walk = (x - startX) * 1.5; // Scrolling speed
+                                el.scrollLeft = scrollLeft - walk;
+                            });
                         }
                     }
                 },
@@ -143,13 +173,14 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
             const me = this;
             // Dynamically add a toggle button for the panel
             // Track the panel and its button
-            me.openedPanels[panel.id] = me.insert(me.index, {
+            me.openedPanels[panel.id] = me.down('#openedPanels').insert(me.index, {
                 xtype: 'button',
                 text: label,
                 enableToggle: true,
                 pressed: true,
                 maxWidth:  150,
                 closable: true,
+                margin: '0 1px',
                 cls: 'ellipsis',
                 iconCls: icon,
                 toggleHandler: function (btn, pressed) {
@@ -162,6 +193,7 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                     }
                 }
             });
+
             panel.on('destroy', () => me.removePanelToggleButton(panel));
 
             me.index++;
@@ -171,7 +203,7 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
             // Remove the toggle button associated with the panel
             const toggleButton = this.openedPanels[panel.id];
             if (toggleButton) {
-                this.remove(toggleButton);
+                this.down('#openedPanels').remove(toggleButton);
                 delete this.openedPanels[panel.id];
             }
 
@@ -179,5 +211,5 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
         }
 
         this.callParent(arguments);
-    }
+    },
 });

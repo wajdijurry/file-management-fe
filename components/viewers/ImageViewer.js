@@ -1,4 +1,3 @@
-// ImageViewer.js
 Ext.define('FileManagement.components.viewers.ImageViewer', {
     extend: 'Ext.panel.Panel',
     xtype: 'imageviewer',
@@ -7,16 +6,14 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
         src: null
     },
 
-    cls: '',
-
     title: 'Image Viewer',
     layout: 'fit',
     closable: true,
     frame: true,
     modal: true,
 
-    width: 600, // Set a fixed width
-    height: 400, // Set a fixed height
+    width: 400, // Set a fixed width
+    height: 350, // Set a fixed height
     x: 220,
     y: 220,
 
@@ -74,8 +71,8 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
             const mainPanelRegion = Ext.getCmp('mainPanelRegion');
             const mainPanelRegionBox = mainPanelRegion.getBox();
 
-            panel.maxWidth = mainPanelRegionBox.width * 2 / 3;
-            panel.maxHeight = mainPanelRegionBox.height * 2 / 3;
+            // panel.maxWidth = mainPanelRegionBox.width * 2 / 3;
+            // panel.maxHeight = mainPanelRegionBox.height * 2 / 3;
         }
     },
 

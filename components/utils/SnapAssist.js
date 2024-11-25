@@ -146,9 +146,6 @@ Ext.define('FileManagement.components.utils.SnapAssist', {
         const userToolbar = Ext.getCmp('userToolbar'); // Assuming the ID is 'userToolbar'
         const userToolbarHeight = userToolbar ? userToolbar.getHeight() : 0;
 
-        const mainPanelRegion = Ext.getCmp('mainPanelRegion');
-        const mainPanelRegionBox = mainPanelRegion.getBox();
-
         let bestZone = null;
         let bestMatchScore = 0; // Score to determine the best zone
 

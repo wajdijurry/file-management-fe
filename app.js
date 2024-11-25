@@ -57,17 +57,17 @@ Ext.application({
                         listeners: {
                             afterrender: function (container) {
 
-                                const snapAssist = Ext.create('FileManagement.components.utils.SnapAssist');
-                                container.add(snapAssist); // Add SnapAssist to the region
-                                snapAssist.initialize(container); // Initialize SnapAssist with the parent container
-
-                                new Ext.util.DelayedTask(function() {
-                                    snapAssist.initialize(container);
-
-                                    if (snapAssist) {
-                                        snapAssist.setSize(container.getWidth(), container.getHeight()); // Set initial size
-                                    }
-                                }).delay(300);
+                                // const snapAssist = Ext.create('FileManagement.components.utils.SnapAssist');
+                                // container.add(snapAssist); // Add SnapAssist to the region
+                                // snapAssist.initialize(container); // Initialize SnapAssist with the parent container
+                                //
+                                // new Ext.util.DelayedTask(function() {
+                                //     snapAssist.initialize(container);
+                                //
+                                //     if (snapAssist) {
+                                //         snapAssist.setSize(container.getWidth(), container.getHeight()); // Set initial size
+                                //     }
+                                // }).delay(300);
 
                                 let currentIndex = 0; // Initialize index for panel switching
                                 window.highestZIndex = 1; // Start z-index tracking
@@ -90,6 +90,8 @@ Ext.application({
                                         // Reset z-index of the currently active panel
                                         if (panels[currentIndex]) {
                                             panels[currentIndex].getEl().setStyle('z-index', 1);
+                                            panels[currentIndex].addCls('grayed-out');
+                                            panels[currentIndex].removeCls('active-panel');
                                         }
 
                                         // Update the index to the next panel, looping back if necessary
@@ -99,6 +101,8 @@ Ext.application({
                                         window.highestZIndex += 1;
                                         if (panels[currentIndex]) {
                                             panels[currentIndex].getEl().setStyle('z-index', window.highestZIndex);
+                                            panels[currentIndex].removeCls('grayed-out');
+                                            panels[currentIndex].addCls('active-panel');
                                             console.log("Switched to panel:", panels[currentIndex].xtype);
                                         }
                                     }
