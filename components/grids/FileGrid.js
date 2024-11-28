@@ -453,21 +453,43 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                         items: [
                             {
                                 text: 'Decompress',
-                                iconCls: 'fa fa-file-archive',
                                 itemId: 'decompressMenuItem',
+                                iconCls: 'fa fa-file-archive',
                                 hidden: true,
-                                handler: function () {
+                                handler: function() {
                                     const grid = Ext.ComponentQuery.query('filegrid')[0];
                                     const selection = grid.getSelectionModel().getSelection();
                                     const zipFile = selection[0];
                                     const token = FileManagement.helpers.Functions.getToken(); // Get the token for authorization
 
                                     if (zipFile && zipFile.get('mimetype') === 'application/zip') {
-                                        Ext.Msg.prompt('Decompress Folder', 'Enter the name of the folder to decompress into:', function (btn, folderName) {
+                                        // Show a prompt dialog to ask for folder name
+                                        Ext.Msg.prompt('Decompress Folder', 'Enter the name of the folder to decompress into:', function(btn, folderName) {
                                             if (btn === 'ok' && folderName) {
-                                                grid.handleDecompression(grid, zipFile, folderName, token);
+                                                // Proceed with decompress request using the specified folder name
+                                                Ext.Ajax.request({
+                                                    url: 'http://localhost:5000/api/files/decompress',
+                                                    method: 'POST',
+                                                    headers: {
+                                                        'Authorization': `Bearer ${token}`,
+                                                        'Content-Type': 'application/json'
+                                                    },
+                                                    jsonData: {
+                                                        filePath: zipFile.get('path'),
+                                                        targetFolder: this.currentFolder ? this.currentFolder + '/' + folderName : folderName,
+                                                        parentId: this.currentFolderId
+                                                    },
+                                                    success: function(response) {
+                                                        Ext.Msg.alert('Success', 'File decompressed successfully.');
+                                                        grid.getStore().reload();
+                                                    },
+                                                    failure: function(response) {
+                                                        let responseJSON = JSON.parse(response.responseText);
+                                                        Ext.Msg.alert('Error', 'Failed to decompress file: ' + responseJSON.error);
+                                                    }
+                                                });
                                             }
-                                        });
+                                        }, this);
                                     }
                                 },
                                 scope: this
@@ -973,114 +995,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         });
 
         return combinedBuffer.buffer; // Return as ArrayBuffer
-    },
-
-    handleDecompression: async function (grid, zipFile, folderName, token) {
-        const progressId = `decompression-${Date.now()}`; // Unique ID for progress bar
-
-        try {
-            // Get the path of the zip file to decompress
-            const zipFilePath = zipFile.get('path').split('/').slice(1).join('/');
-
-            // Initialize the progress bar
-            FileManagement.components.utils.ProgressBarManager.addProgressBar(
-                progressId,
-                `Decompressing ${zipFile.get('name')}`,
-                [],
-                null,
-                false // No cancel button for now
-            );
-
-            const response = await fetch('http://localhost:5000/api/files/decompress', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
-                },
-                body: JSON.stringify({
-                    filePath: zipFilePath,
-                    targetFolder: grid.currentFolder ? `${grid.currentFolder}/${folderName}` : folderName,
-                    parentId: grid.currentFolderId,
-                    merge: false
-                })
-            });
-
-            if (!response.ok) {
-                const errorData = await response.json();
-                throw new Error(errorData.error || 'Failed to start decompression.');
-            }
-
-            const reader = response.body.getReader();
-            const decoder = new TextDecoder('utf-8');
-            let buffer = '';
-
-            while (true) {
-                const { value, done } = await reader.read();
-                if (done) break;
-
-                buffer += decoder.decode(value, { stream: true });
-
-                // Process newline-delimited JSON
-                const lines = buffer.split('\n');
-                buffer = lines.pop(); // Keep incomplete JSON in buffer
-
-                for (const line of lines) {
-                    if (line.trim()) {
-                        const data = JSON.parse(line);
-
-                        if (data.progress !== undefined) {
-                            const progress = Math.round((data.progress / data.total) * 100);
-                            FileManagement.components.utils.ProgressBarManager.updateProgress(
-                                progressId,
-                                progress,
-                                `Decompressing ${zipFile.get('name')} (${progress}%)`
-                            );
-                        } else if (data.conflict) {
-                            const userDecision = await this.handleConflict(data.conflict.name);
-                            grid.fireEvent('continueDecompression', userDecision, zipFilePath, folderName, grid.currentFolderId);
-                        } else if (data.success) {
-                            Ext.Msg.alert('Success', data.message);
-                            grid.getStore().reload(); // Reload the store after decompression
-                            break;
-                        }
-                    }
-                }
-            }
-        } catch (error) {
-            Ext.Msg.alert('Error', error.message);
-        } finally {
-            // Remove the progress bar
-            FileManagement.components.utils.ProgressBarManager.removeProgressBar(progressId);
-        }
-    },
-
-    handleConflict: function (conflictingItemName) {
-        return new Promise((resolve) => {
-            Ext.Msg.confirm(
-                'Conflict Detected',
-                `Item "${conflictingItemName}" already exists. Overwrite?`,
-                (choice) => {
-                    resolve(choice === 'yes');
-                }
-            );
-
-            // Ensure aria-hidden is removed
-            Ext.defer(() => {
-                const msgBoxEl = Ext.Msg.el; // Access the MessageBox container
-                if (msgBoxEl) {
-                    const observer = new MutationObserver((mutations) => {
-                        mutations.forEach((mutation) => {
-                            if (mutation.attributeName === 'aria-hidden' && msgBoxEl.dom.getAttribute('aria-hidden') === 'true') {
-                                msgBoxEl.dom.removeAttribute('aria-hidden'); // Force remove aria-hidden
-                                msgBoxEl.dom.focus(); // Set focus to the MessageBox
-                            }
-                        });
-                    });
-
-                    observer.observe(msgBoxEl.dom, { attributes: true }); // Observe attribute changes
-                }
-            }, 50);
-        });
-    },
+    }
 
 });
