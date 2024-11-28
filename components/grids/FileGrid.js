@@ -367,8 +367,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         var me = this;
 
         me.on('continueDecompression', (decision, zipFilePath, folderName, parentId) => {
-            debugger;
-            console.log(arguments);
+            // debugger;
 
             console.log('Decompression decision received:', decision);
 
@@ -385,9 +384,11 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     decision: decision, // Send the user's decision back to the server
                     filePath: zipFilePath,
                     targetFolder: folderName,
-                    merge: decision
+                    merge: decision,
+                    parent_id: parentId
                 },
                 success: function (response) {
+                    // debugger;
                     const result = Ext.decode(response.responseText);
                     if (result.success) {
                         console.log('Server acknowledged the decision. Continuing decompression.');
@@ -397,6 +398,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     }
                 },
                 failure: function (response) {
+                    // debugger;
                     console.error('Failed to notify the server of the decision:', response);
                     Ext.Msg.alert('Error', 'An error occurred while processing your decision. Retrying...');
 
@@ -974,9 +976,21 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     },
 
     handleDecompression: async function (grid, zipFile, folderName, token) {
+        const progressId = `decompression-${Date.now()}`; // Unique ID for progress bar
+
         try {
-            debugger;
+            // Get the path of the zip file to decompress
             const zipFilePath = zipFile.get('path').split('/').slice(1).join('/');
+
+            // Initialize the progress bar
+            FileManagement.components.utils.ProgressBarManager.addProgressBar(
+                progressId,
+                `Decompressing ${zipFile.get('name')}`,
+                [],
+                null,
+                false // No cancel button for now
+            );
+
             const response = await fetch('http://localhost:5000/api/files/decompress', {
                 method: 'POST',
                 headers: {
@@ -998,25 +1012,45 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
             const reader = response.body.getReader();
             const decoder = new TextDecoder('utf-8');
+            let buffer = '';
 
             while (true) {
                 const { value, done } = await reader.read();
                 if (done) break;
 
-                const chunk = decoder.decode(value);
-                const data = JSON.parse(chunk);
+                buffer += decoder.decode(value, { stream: true });
 
-                if (data.conflict) {
-                    const userDecision = await this.handleConflict(data.conflict.name);
-                    grid.fireEvent('continueDecompression', userDecision, zipFilePath, folderName, grid.currentFolderId); // Inform the server of the decision
-                } else if (data.success) {
-                    Ext.Msg.alert('Success', data.message);
-                    grid.getStore().reload(); // Reload the store after decompression
-                    break;
+                // Process newline-delimited JSON
+                const lines = buffer.split('\n');
+                buffer = lines.pop(); // Keep incomplete JSON in buffer
+
+                for (const line of lines) {
+                    if (line.trim()) {
+                        const data = JSON.parse(line);
+
+                        if (data.progress !== undefined) {
+                            const progress = Math.round((data.progress / data.total) * 100);
+                            FileManagement.components.utils.ProgressBarManager.updateProgress(
+                                progressId,
+                                progress,
+                                `Decompressing ${zipFile.get('name')} (${progress}%)`
+                            );
+                        } else if (data.conflict) {
+                            const userDecision = await this.handleConflict(data.conflict.name);
+                            grid.fireEvent('continueDecompression', userDecision, zipFilePath, folderName, grid.currentFolderId);
+                        } else if (data.success) {
+                            Ext.Msg.alert('Success', data.message);
+                            grid.getStore().reload(); // Reload the store after decompression
+                            break;
+                        }
+                    }
                 }
             }
         } catch (error) {
             Ext.Msg.alert('Error', error.message);
+        } finally {
+            // Remove the progress bar
+            FileManagement.components.utils.ProgressBarManager.removeProgressBar(progressId);
         }
     },
 

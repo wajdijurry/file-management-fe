@@ -28,9 +28,18 @@ Ext.define('FileManagement.components.navigation.NavigationPanel', {
                     itemTpl: '{title}',
                     listeners: {
                         itemclick: function(view, record) {
-                            const panel = record.get('panelRef');
-                            if (panel) {
-                                panel.getEl().setStyle('z-index', ++window.highestZIndex);
+                            const panels = Ext.getCmp('mainPanelRegion').items.getRange();
+
+                            for (const panel of panels) {
+                                if (panel.id === record.get('panelRef').id) {
+                                    panel.getEl().setStyle('z-index', ++window.highestZIndex);
+                                    panel.removeCls('grayed-out');
+                                    panel.addCls('active-panel');
+                                    continue;
+                                }
+
+                                panel.addCls('grayed-out');
+                                panel.removeCls('active-panel');
                             }
                         }
                     }

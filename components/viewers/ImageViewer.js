@@ -14,8 +14,8 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
 
     width: 400, // Set a fixed width
     height: 350, // Set a fixed height
-    x: 220,
-    y: 220,
+    x: 0,
+    y: 0,
 
     style: {
         zIndex: ++window.highestZIndex,
@@ -71,8 +71,8 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
             const mainPanelRegion = Ext.getCmp('mainPanelRegion');
             const mainPanelRegionBox = mainPanelRegion.getBox();
 
-            // panel.maxWidth = mainPanelRegionBox.width * 2 / 3;
-            // panel.maxHeight = mainPanelRegionBox.height * 2 / 3;
+            panel.maxWidth = mainPanelRegionBox.width;
+            panel.maxHeight = mainPanelRegionBox.height;
         }
     },
 
