@@ -237,7 +237,8 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                     }
                                 },
                                 failure: function(response) {
-                                    Ext.Msg.alert('Error', 'Failed to create folder');
+                                    let error = JSON.parse(response.responseText).message;
+                                    Ext.Msg.alert('Error', error ?? 'Failed to create folder');
                                 },
                                 scope: this // Preserve the context
                             });

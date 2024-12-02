@@ -26,7 +26,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
         hide: function() {
             FileManagement.components.utils.PanelUtils.hide(this);
         },
-        destroy: function() {
+        destroy: function(form) {
             FileManagement.components.utils.PanelUtils.destroy(this);
         },
     },
@@ -55,7 +55,6 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
             text: 'Upload',
             handler: async function (btn) {
                 const form = btn.up('form').getForm();
-                // console.log(form);
                 if (!form.isValid()) return;
 
                 const fileField = form.findField('file');
@@ -111,8 +110,12 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
                     fileGrid.getStore().reload();
                 }
 
-                form.reset();
-                btn.up('form').destroy();
+                try {
+                    form.reset();
+                    btn.up('form').destroy();
+                } catch (err) {
+                    // do nothing, as the form might be closed
+                }
             }
         }
     ],

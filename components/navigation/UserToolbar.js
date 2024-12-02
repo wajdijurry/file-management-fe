@@ -115,6 +115,11 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                 },
                 '->', // Pushes the logout button to the right
                 {
+                    xtype: 'container',
+                    itemId: 'progressBar',
+                    items: []
+                },
+                {
                     xtype: 'button',
                     text: 'K-Shortcuts',
                     iconCls: 'fa fa-regular fa-keyboard',

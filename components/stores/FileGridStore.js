@@ -133,8 +133,9 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
                 Ext.Msg.alert('Success', 'File/Folder renamed successfully.');
                 this.reload(); // Reload the store after renaming
             },
-            failure: () => {
-                Ext.Msg.alert('Error', 'Failed to rename file/folder.');
+            failure: (response) => {
+                let error = JSON.parse(response.responseText).message;
+                Ext.Msg.alert('Error', error ?? 'Failed to rename file/folder.');
             }
         });
     },

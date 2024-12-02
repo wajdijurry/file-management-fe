@@ -59,7 +59,7 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
         let queueWindow = createQueueWindow(); // Reference to the queue window
 
         // Add the progress bar to the toolbar
-        const progressBarContainer = userToolbar.add({
+        const progressBarContainer = userToolbar.down('#progressBar').add({
             xtype: 'container',
             layout: 'hbox',
             items: [
