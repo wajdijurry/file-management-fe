@@ -74,12 +74,12 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
     zipStack: [], // Track nested zip entries for navigation
     currentZip: null, // Store the current zip instance
 
-    initComponent: async function() {
+    initComponent: function() {
         const token = FileManagement.helpers.Functions.getToken();
         const zipFilePath = this.getSrc();
         const zipPanel = this;
 
-        // Initialize grid panel and other items
+        // Initialize grid panel and other items first
         this.items = [{
             xtype: 'gridpanel',
             store: {
@@ -128,13 +128,73 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
 
         this.callParent(arguments);
 
-        // Fetch and process the zip file after initialization
+        // Load zip contents after render
+        this.on('afterrender', function() {
+            this.loadZipContents();
+        }, this);
+    },
+
+    loadZipContents: async function() {
+        this.setLoading({
+            msg: 'Starting download...',
+            useTargetEl: true
+        });
+
+        const token = FileManagement.helpers.Functions.getToken();
+        const zipFilePath = this.getSrc();
+
         try {
+            // First make a HEAD request to get the file size
+            const headResponse = await fetch(zipFilePath, { 
+                method: 'HEAD',
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+            const fileSize = headResponse.headers.get('Content-Length');
+
+            // Then make the actual GET request
             const response = await fetch(zipFilePath, { headers: { 'Authorization': `Bearer ${token}` } });
             if (!response.ok) throw new Error('Failed to load zip file');
 
-            const zipData = await response.arrayBuffer();
-            const zip = await JSZip.loadAsync(zipData);
+            const reader = response.body.getReader();
+            let receivedLength = 0;
+            const chunks = [];
+
+            while(true) {
+                const {done, value} = await reader.read();
+                
+                if (done) break;
+                
+                chunks.push(value);
+                receivedLength += value.length;
+                
+                if (fileSize) {
+                    const percentComplete = Math.round((receivedLength / fileSize) * 100);
+                    this.setLoading({
+                        msg: `Loading zip contents... ${percentComplete}%`,
+                        useTargetEl: true
+                    });
+                } else {
+                    this.setLoading({
+                        msg: `Loading zip contents... ${(receivedLength / (1024 * 1024)).toFixed(1)} MB`,
+                        useTargetEl: true
+                    });
+                }
+            }
+
+            this.setLoading({
+                msg: 'Processing zip contents...',
+                useTargetEl: true
+            });
+
+            // Concatenate chunks into a single Uint8Array
+            const chunksAll = new Uint8Array(receivedLength);
+            let position = 0;
+            for(let chunk of chunks) {
+                chunksAll.set(chunk, position);
+                position += chunk.length;
+            }
+
+            const zip = await JSZip.loadAsync(chunksAll);
             this.currentZip = zip;
             this.zipStack = [];
 
@@ -142,6 +202,8 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
             this.processZipEntries(zip, this.getFileName());
         } catch (error) {
             Ext.Msg.alert('Error', `Failed to load the zip file: ${error.message}`);
+        } finally {
+            this.setLoading(false);
         }
     },
 

@@ -8,7 +8,8 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
         url: 'http://localhost:5000/api/files?parent_id=', // API endpoint to fetch files
         reader: {
             type: 'json',
-            rootProperty: 'files' // API response structure
+            rootProperty: 'files', // API response structure
+            idProperty: 'id' // Use MongoDB's id as the record identifier
         }
     },
 
@@ -29,6 +30,7 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
     },
 
     fields: [
+        { name: 'id', type: 'string' }, // MongoDB ID field
         { name: 'mimetype', type: 'string' },
         {
             name: 'icon',
@@ -36,6 +38,7 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
             convert: function(value, record) {
                 let mimeType = record.get('mimetype');
                 let iconClass = 'fa fa-xl'; // Base class
+
                 if (record.get('isFolder')) {
                     iconClass += ' fa-folder'; // Folder icon
                 } else {
@@ -46,7 +49,6 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
                         case 'image/jpeg':
                         case 'image/png':
                         case 'image/avif':
-                        // case mimeType.startsWith('image/'):
                             iconClass += ' fa-image green-icon';
                             break;
                         case 'doc':
@@ -62,14 +64,18 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
                         case 'application/vnd.ms-powerpoint':
                         case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
                             iconClass += ' fa-duotone fa-solid fa-file-ppt';
-                            break
+                            break;
                         case 'text/plain':
                             iconClass += ' fa-duotone fa-solid fa-file-lines';
                             break;
-                        // Add more cases as needed
                         default:
-                            iconClass += ' fa-duotone fa-solid fa-file'; // Default icon class
+                            iconClass += ' fa-duotone fa-solid fa-file';
                     }
+                }
+
+                // Add lock icon if item is locked
+                if (record.get('isLocked')) {
+                    iconClass += ' fa-lock'; // Lock icon
                 }
 
                 return iconClass;
@@ -90,7 +96,9 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
             name: 'createdAt',
             type: 'date' // Automatically parses ISO date strings from MongoDB
         },
-        { name: 'isFolder', type: 'boolean' }
+        { name: 'isFolder', type: 'boolean' },
+        { name: 'isLocked', type: 'boolean' },
+        { name: 'hasChildren', type: 'boolean' }
     ],
 
     loadFolderContents: function(folderName, folderId, pushToPath = true) {

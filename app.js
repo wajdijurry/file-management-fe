@@ -5,6 +5,9 @@ Ext.Loader.setPath({
     'FileManagement.components.viewers': './components/viewers',
     'FileManagement.components.utils': './components/utils',
     'FileManagement.components.navigation': './components/navigation',
+    'FileManagement.components.models': './components/models',
+    'FileManagement.components.actions': './components/actions',
+    'FileManagement.components.dialogs': './components/dialogs',
     'FileManagement.helpers': './helpers',
 });
 
@@ -168,4 +171,3 @@ Ext.application({
 Ext.Ajax.setDefaultHeaders({
     'Authorization': `Bearer ${localStorage.getItem('token')}`
 });
-

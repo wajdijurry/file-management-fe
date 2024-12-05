@@ -13,6 +13,12 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     currentFolderPath: [], // Store the folder path segments
     userId: null, // Store the user ID to represent the root directory
 
+    requires: [
+        'FileManagement.components.utils.PanelUtils',
+        'FileManagement.components.utils.FileGridUtils',
+        'FileManagement.components.actions.FileGridActions'
+    ],
+
     // floating: true, // Enables ZIndexManager for bringToFront
 
     draggable: {
@@ -104,7 +110,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
     // Define the columns for the grid
     columns: [
-        // { text: 'Name', dataIndex: 'name', flex: 1 },
         {
             text: 'Name',
             dataIndex: 'name',
@@ -119,7 +124,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             text: 'Upload Date',
             dataIndex: 'createdAt',
             width: 150,
-            renderer: Ext.util.Format.dateRenderer('Y-m-d H:i:s')  // Customize the date format here
+            renderer: Ext.util.Format.dateRenderer('Y-m-d H:i:s')
         }
     ],
 
@@ -137,17 +142,12 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 xtype: 'textfield',
                 emptyText: 'Search by name...',
                 listeners: {
-                    change: function (field, newValue) {
+                    change: function(field, newValue) {
                         var grid = field.up('gridpanel');
                         var store = grid.getStore();
-
-                        // Clear any existing filters
                         store.clearFilter();
-
-                        // Apply the new filter
                         if (newValue) {
-                            store.filterBy(function (record) {
-                                // Assuming 'name' is the field you want to search
+                            store.filterBy(function(record) {
                                 return record.get('name').toLowerCase().includes(newValue.toLowerCase());
                             });
                         }
@@ -160,25 +160,25 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 iconCls: 'fa fa-refresh',
                 handler: function() {
                     const grid = this.up('grid');
-                    grid.getStore().reload(); // Reload the store data
+                    grid.getStore().reload();
                 }
             },
             {
                 text: 'Delete Selected',
                 iconCls: 'fa fa-trash red-icon',
-                handler: function () {
-                    var grid = this.up('grid'); // Get the grid reference
-                    grid.onDeleteFiles(); // Call the delete function
+                handler: function() {
+                    var grid = this.up('grid');
+                    FileManagement.components.actions.FileGridActions.onDeleteFiles(grid);
                 },
-                disabled: true, // Initially disabled
-                itemId: 'deleteButton' // Give it an itemId for easy access
+                disabled: true,
+                itemId: 'deleteButton'
             },
             {
                 text: 'Go Up',
                 iconCls: 'fa fa-level-up',
-                itemId: 'goUpButton',  // Add an itemId for easy access
-                disabled: true,        // Initially disabled at root level
-                handler: function () {
+                itemId: 'goUpButton',
+                disabled: true,
+                handler: function() {
                     const grid = this.up('grid');
                     grid.navigateUp();
                 }
@@ -357,6 +357,16 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 }
             },
             {
+                text: 'Move Selected',
+                iconCls: 'fa fa-arrows-alt',
+                id: 'moveItemsButton',
+                disabled: true, // Initially disabled
+                handler: function () {
+                    const grid = this.up('grid');
+                    grid.moveItemsHandler(arguments);
+                }
+            },
+            {
                 xtype: 'tbfill' // Fills remaining space in the toolbar
             }
         ],
@@ -448,6 +458,103 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     }
                 },
                 {
+                    text: 'Move Item',
+                    iconCls: 'fa fa-arrows-alt',
+                    handler: this.moveItemsHandler
+                },
+                {
+                    text: 'Set Password',
+                    iconCls: 'fa fa-lock',
+                    itemId: 'setPasswordMenuItem',
+                    handler: function(item) {
+                        const record = me.getSelectionModel().getSelection()[0];
+                        if (record) {
+                            Ext.create('FileManagement.components.dialogs.SetPasswordDialog', {
+                                itemId: record.get('id'),
+                                itemName: record.get('name'),
+                                isFolder: record.get('isFolder'),
+                                onSuccess: function() {
+                                    me.getStore().reload();
+                                }
+                            }).show();
+                        }
+                    }
+                },
+                {
+                    text: 'Remove Password',
+                    itemId: 'removePasswordMenuItem',
+                    iconCls: 'fa fa-unlock',
+                    handler: function(item) {
+                        const record = me.getSelectionModel().getSelection()[0];
+                        if (record && record.get('isLocked')) {
+                            const passwordWindow = Ext.create('Ext.window.Window', {
+                                title: 'Remove Password',
+                                modal: true,
+                                width: 300,
+                                layout: 'form',
+                                padding: 10,
+                                items: [{
+                                    xtype: 'textfield',
+                                    inputType: 'password',
+                                    fieldLabel: 'Current Password',
+                                    name: 'password',
+                                    allowBlank: false,
+                                    width: '100%',
+                                    listeners: {
+                                        specialkey: function(field, e) {
+                                            if (e.getKey() === e.ENTER) {
+                                                passwordWindow.down('#submitButton').handler();
+                                            }
+                                        }
+                                    }
+                                }],
+                                buttons: [{
+                                    text: 'Cancel',
+                                    handler: function() {
+                                        passwordWindow.close();
+                                    }
+                                }, {
+                                    text: 'Remove',
+                                    itemId: 'submitButton',
+                                    handler: function() {
+                                        const password = passwordWindow.down('textfield').getValue();
+                                        if (!password) {
+                                            Ext.Msg.alert('Error', 'Please enter the current password.');
+                                            return;
+                                        }
+
+                                        Ext.Ajax.request({
+                                            url: 'http://localhost:5000/api/files/password/remove',
+                                            method: 'POST',
+                                            jsonData: {
+                                                itemId: record.get('id'),
+                                                currentPassword: password,
+                                                isFolder: record.get('isFolder')
+                                            },
+                                            success: function(response) {
+                                                const result = Ext.JSON.decode(response.responseText);
+                                                if (result.success) {
+                                                    Ext.Msg.alert('Success', 'Password removed successfully.');
+                                                    me.getStore().reload();
+                                                    passwordWindow.close();
+                                                } else {
+                                                    Ext.Msg.alert('Error', 'Failed to remove password.');
+                                                }
+                                            },
+                                            failure: function() {
+                                                Ext.Msg.alert('Error', 'Failed to remove password.');
+                                            }
+                                        });
+                                    }
+                                }]
+                            });
+
+                            passwordWindow.show();
+                            passwordWindow.down('textfield').focus(true, 100);
+                        }
+                    }
+                },
+                {
                     text: 'Actions',
                     itemId: 'actionsMenu',
                     menu: {
@@ -533,6 +640,12 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     const renameMenuItem = menu.down('#renameMenuItem');
                     renameMenuItem.setDisabled(selection.length !== 1);
 
+                    const setPasswordMenuItem = menu.down('#setPasswordMenuItem');
+                    setPasswordMenuItem.setDisabled(selection.length !== 1);
+
+                    const removePasswordMenuItem = menu.down('#removePasswordMenuItem');
+                    removePasswordMenuItem.setDisabled(selection.length !== 1 || !selection[0].get('isLocked'));
+
                     return true;
                 },
             }
@@ -574,6 +687,9 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             // Disable download button if nothing selected or a folder is selected
             var downloadButton = me.down('#downloadButton');
             downloadButton.setDisabled(selected.length === 0);
+
+            var moveButton = me.down('#moveItemsButton');
+            moveButton.setDisabled(selected.length === 0);
         });
 
         // Add context menu listener
@@ -592,26 +708,13 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     },
 
     // Handler for "View" option (for files)
-    onViewFile: function() {
-        const record = this.getSelectionModel().getSelection()[0];
-
-        // Use ViewerFactory to open the file in the appropriate viewer
-        const viewer = FileManagement.components.viewers.ViewerFactory.createViewer(record);
-        if (viewer) {
-            viewer.show();
-        } else {
-            Ext.Msg.alert('Error', 'Unable to view this file type.');
-        }
+    onViewFile: function(record) {
+        FileManagement.components.actions.FileGridActions.onViewFile(this, record);
     },
 
     // Handler for "Open" option (for folders)
-    onOpenFolder: function() {
-        const record = this.getSelectionModel().getSelection()[0];
-        const folderName = record.get('name');
-        const folderId = record.get('_id');
-
-        // Call the method to load folder contents
-        this.loadFolderContents(folderName, folderId);
+    onOpenFolder: function(record) {
+        FileManagement.components.actions.FileGridActions.onOpenFolder(this, record);
     },
 
     // Method to update the breadcrumb based on the current folder path
@@ -678,49 +781,53 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         });
     },
 
-    // FileGrid.js
     onDeleteFiles: function() {
-        const selectedRecords = this.getSelectionModel().getSelection();
-        const fileIds = selectedRecords.map(record => record.get('_id'));
-
-        if (fileIds.length > 0) {
-            Ext.Msg.confirm('Confirm', 'Are you sure you want to delete the selected files?', (btn) => {
-                if (btn === 'yes') {
-                    this.getStore().deleteFiles(fileIds);
-                }
-            });
-        } else {
-            Ext.Msg.alert('Warning', 'Please select files to delete.');
-        }
-    },
-
-    onCompressSelectedFiles: function(grid) {
-        const selectedRecords = this.getSelectionModel().getSelection();
-        if (selectedRecords) {
-            this.getStore().compressSelected(grid, selectedRecords, grid.currentFolderId, grid.currentFolder);
-        }
+        FileManagement.components.actions.FileGridActions.onDeleteFiles(this);
     },
 
     onRenameFile: function() {
-        const selectedRecord = this.getSelectionModel().getSelection()[0];
-        if (selectedRecord) {
-            const fileId = selectedRecord.get('_id');
-            const currentName = selectedRecord.get('name');
-            const isFolder = selectedRecord.get('isFolder');
-
-            Ext.Msg.prompt('Rename', 'Enter new name:', (btn, newName) => {
-                if (btn === 'ok' && newName && newName !== currentName) {
-                    this.getStore().renameFile(fileId, newName, isFolder);
-                }
-            }, this, false, currentName);
-        }
+        FileManagement.components.actions.FileGridActions.onRenameFile(this);
     },
 
+    onCompressSelectedFiles: function() {
+        FileManagement.components.actions.FileGridActions.onCompressSelectedFiles(this);
+    },
+
+    downloadFileInChunks: function(filePath, fileName, token, chunkSize) {
+        return FileManagement.components.utils.FileGridUtils.downloadFileInChunks(filePath, fileName, token, chunkSize);
+    },
+
+    concatenateChunks: function(chunks) {
+        return FileManagement.components.utils.FileGridUtils.concatenateChunks(chunks);
+    },
+
+    moveItem: function(selectedItems, targetRecord) {
+        return FileManagement.components.utils.FileGridUtils.moveItem(selectedItems, targetRecord);
+    },
+
+    // FileGrid.js
     onFileDoubleClick: function (record) {
+        const grid = Ext.ComponentQuery.query('filegrid')[0];
+
+        if (record.get('isLocked')) {
+            Ext.create('FileManagement.components.dialogs.PasswordPromptDialog', {
+                record,
+                onSuccess: function(record) {
+                    grid.handleItemDblClick(record);
+                }
+            }).show();
+
+            return false;
+        }
+
+        this.handleItemDblClick(record);
+    },
+
+    handleItemDblClick: function (record) {
         if (record.get('isFolder')) {
-            this.loadFolderContents(record.get('name'), record.get('_id'));
+            this.loadFolderContents(record.get('name'), record.get('id'));
         } else {
-            const fileId = record.get('_id'); // Unique identifier for the file
+            const fileId = record.get('id'); // Unique identifier for the file
             const mainPanel = Ext.getCmp('mainPanelRegion'); // Parent container reference
 
             if (!mainPanel) {
@@ -805,14 +912,17 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 // Check if the target is a folder
                 // if (overModel.get('isFolder')) {
                     const draggedRecords = data.records;
-                    const targetId = overModel.get('_id');
+                    const targetId = overModel.get('id');
 
                     // Call the moveItem function for each dragged record
                     // draggedRecords.forEach(record => {
                     //     this.up('filegrid').moveItem(record, targetFolderId);
                     // });
 
-                    this.up('filegrid').moveItem(draggedRecords, overModel);
+                    this.up('filegrid').moveItem(draggedRecords, {
+                        id: overModel.get('id'),
+                        name: overModel.get('name')
+                    });
                 // } else {
                 //     Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder.');
                 // }
@@ -820,182 +930,89 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         }
     },
 
-    // Method to handle moving the item to another folder
-    // moveItem: function(record, targetFolderId) {
-    //     const itemId = record.get('_id');
-    //
-    //     // Call the backend to update the folder location
-    //     Ext.Ajax.request({
-    //         url: `http://localhost:5000/api/files/move`,
-    //         method: 'POST',
-    //         jsonData: {
-    //             itemId: itemId,
-    //             targetFolderId: targetFolderId
-    //         },
-    //         success: () => {
-    //             Ext.Msg.alert('Success', 'Item moved successfully.');
-    //             this.getStore().reload(); // Refresh the grid after moving
-    //         },
-    //         failure: (response) => {
-    //             const responseText = Ext.decode(response.responseText);
-    //             Ext.Msg.alert('Error', responseText.message || 'Failed to move the item.');
-    //         }
-    //     });
-    // },
+    // Move items handler
+    moveItemsHandler: function () {
+        const grid = Ext.ComponentQuery.query('filegrid')[0];
+        const selected = grid.getSelectionModel().getSelection();
 
-    moveItem: function(selectedItems, targetRecord) {
-        if (!targetRecord) {
-            Ext.Msg.alert('Error', 'Please select a target folder or ZIP file.');
+        if (selected.length === 0) {
+            Ext.Msg.alert('Error', 'No items selected for moving.');
             return;
         }
 
-        const isTargetZip = targetRecord.get('name').endsWith('.zip'); // Check if the target is a ZIP file
-        const targetId = targetRecord.get('_id'); // Get the target folder/ZIP ID
-        const targetName = targetRecord.get('name');
-
-        // Collect the IDs of selected files/folders to be moved
-        const itemIds = selectedItems.map(item => item.get('_id'));
-        const grid = this.up('grid');
-
-        // Confirm the move action
-        Ext.Msg.confirm(
-            'Confirm Move',
-            `Are you sure you want to move the selected items to ${isTargetZip ? 'ZIP file: ' + targetName : 'folder: ' + targetName}?`,
-            function(choice) {
-                if (choice === 'yes') {
-                    // Show a loading mask
-                    const mask = new Ext.LoadMask({
-                        msg: 'Moving items...',
-                        target: this
-                    });
-                    mask.show();
-
-                    // Make the API call to move the items
-                    Ext.Ajax.request({
-                        url: 'http://localhost:5000/api/files/move', // Backend endpoint
-                        method: 'POST',
-                        jsonData: {
-                            itemIds: itemIds,
-                            targetId: targetId,
-                            isTargetZip: isTargetZip // Let the backend know if the target is a ZIP
-                        },
-                        success: function(response) {
-                            mask.hide();
-
-                            const res = Ext.decode(response.responseText);
-                            if (res.success) {
-                                Ext.Msg.alert('Success', 'Items moved successfully.');
-                                this.getStore().reload(); // Reload the store data
-                            } else {
-                                Ext.Msg.alert('Error', res.message || 'Failed to move items.');
-                            }
-                        },
-                        failure: function(response) {
-                            mask.hide();
-                            Ext.Msg.alert('Error', 'An error occurred while moving the items.');
-                        },
-                        scope: this
-                    });
+        Ext.create('Ext.window.Window', {
+            title: 'Move Item',
+            modal: true,
+            frame: true,
+            layout: 'fit',
+            width: 400,
+            height: 300,
+            items: [
+                {
+                    xtype: 'treepanel',
+                    store: Ext.create('FileManagement.components.stores.FolderTreeStore'),
+                    listeners: {
+                        select: function (tree, record) {
+                            // Update the "Move To" button with the selected folder name
+                            const moveButton = this.up('window').down('#moveButton');
+                            moveButton.setText(`Move To "${record.get('text')}"`);
+                            moveButton.setDisabled(false); // Enable the button when a folder is selected
+                        }
+                    }
                 }
-            },
-            this
-        );
-    },
+            ],
+            bbar: [
+                {
+                    text: 'Move To', // Default button text
+                    itemId: 'moveButton', // Unique ID for easy access
+                    disabled: true, // Disabled by default until a folder is selected
+                    handler: function (btn) {
+                        const window = btn.up('window');
+                        const tree = window.down('treepanel');
+                        const selectedNode = tree.getSelectionModel().getSelection()[0]; // Get the selected folder
 
-    downloadFileInChunks: async function (filePath, fileName, token, chunkSize) {
-        let start = 0;
-        const chunks = [];
-        const progressId = `download-${fileName}`; // Unique ID for this download progress bar
+                        if (!selectedNode) {
+                            Ext.Msg.alert('Error', 'Please select a target folder.');
+                            return;
+                        }
 
-        const abortController = new AbortController();
+                        const fileGrid = Ext.ComponentQuery.query('filegrid')[0];
+                        const selectedItems = fileGrid.getSelectionModel().getSelection();
 
-        // Add progress bar with a unique ID
-        FileManagement.components.utils.ProgressBarManager.addProgressBar(progressId, `Downloading ${fileName} (0%)`, [], function () {
-            console.log(`Cancelling upload for ${fileName}`);
-            abortController.abort(); // Abort ongoing requests
-        }, false);
+                        if (selectedItems.length === 0) {
+                            Ext.Msg.alert('Error', 'No items selected for moving.');
+                            return;
+                        }
 
-        try {
-            // Fetch the file size from the backend
-            const metadataResponse = await fetch('http://localhost:5000/api/files/file-size', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
+                        // Show loading mask
+                        const mask = new Ext.LoadMask({
+                            msg: 'Moving items...',
+                            target: fileGrid
+                        });
+                        mask.show();
+
+                        // Use the moveItem function
+                        fileGrid.moveItem(selectedItems, {
+                            id: selectedNode.get('id'),
+                            name: selectedNode.get('text')
+                        }).then(function(response) {
+                            mask.hide();
+                            window.close();
+                            fileGrid.getStore().reload();
+                            Ext.Msg.alert('Success', 'Items moved successfully.');
+                        }).catch(function(error) {
+                            mask.hide();
+                            Ext.Msg.alert('Error', error);
+                        });
+                    }
                 },
-                body: JSON.stringify({ filePath }),
-                signal: abortController.signal // Attach AbortController signal
-            });
-
-            if (!metadataResponse.ok) {
-                throw new Error('Failed to fetch file metadata.');
-            }
-
-            const { fileSize } = await metadataResponse.json();
-
-            // Fetch file chunks
-            while (start < fileSize) {
-                const end = Math.min(start + chunkSize - 1, fileSize - 1);
-                const chunkResponse = await fetch('http://localhost:5000/api/files/download', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${token}`,
-                        'Range': `bytes=${start}-${end}`,
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({ filePath }),
-                    signal: abortController.signal // Attach AbortController signal
-                });
-
-                if (!chunkResponse.ok) {
-                    throw new Error('Failed to download chunk.');
+                {
+                    text: 'Cancel',
+                    handler: function (btn) {
+                        btn.up('window').close(); // Close the window
+                    }
                 }
-
-                const chunk = await chunkResponse.arrayBuffer(); // Ensure raw data is received
-                chunks.push(chunk);
-                start += chunkSize;
-
-                const progress = Math.round((start / fileSize) * 100);
-                FileManagement.components.utils.ProgressBarManager.updateProgress(progressId, progress, `Downloading ${fileName} (${progress}%)`);
-            }
-
-            // Combine chunks into a single Blob
-            const combinedBuffer = this.concatenateChunks(chunks);
-
-            // Create a Blob and download the file
-            const blob = new Blob([combinedBuffer], { type: 'application/octet-stream' });
-            const link = document.createElement('a');
-            link.href = window.URL.createObjectURL(blob);
-            link.download = fileName;
-            link.click();
-
-            FileManagement.components.utils.ProgressBarManager.updateProgress(progressId, 100, 'Download Complete');
-        } catch (error) {
-            if (error.name === 'AbortError') {
-                console.log(`Upload for ${file.name} canceled.`);
-                FileManagement.components.utils.ProgressBarManager.updateProgress(progressId, 0, 'Upload Canceled');
-            } else {
-                console.error('Error during upload:', error);
-                FileManagement.components.utils.ProgressBarManager.updateProgress(progressId, 0, 'Upload Failed');
-            }
-            Ext.Msg.alert('Error', `Download failed: ${error.message}`);
-            FileManagement.components.utils.ProgressBarManager.updateProgress(progressId, 0, 'Download Failed');
-        } finally {
-            FileManagement.components.utils.ProgressBarManager.removeProgressBar(progressId);
-        }
-    },
-
-    concatenateChunks: function (chunks) {
-        const totalLength = chunks.reduce((sum, chunk) => sum + chunk.byteLength, 0);
-        const combinedBuffer = new Uint8Array(totalLength);
-
-        let offset = 0;
-        chunks.forEach(chunk => {
-            combinedBuffer.set(new Uint8Array(chunk), offset);
-            offset += chunk.byteLength;
-        });
-
-        return combinedBuffer.buffer; // Return as ArrayBuffer
+            ]
+        }).show();
     }
-
 });

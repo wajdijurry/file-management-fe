@@ -83,7 +83,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
                 for (let file of files) {
                     try {
                         await btn.up('form').uploadFileInChunks(file, progressId, CHUNK_SIZE, abortController.signal);
-                        FileManagement.components.utils.ProgressBarManager.updateFileStatus(progressId, file.name, 'Uploaded');
+                        FileManagement.components.utils.ProgressBarManager.updateQueuedStatus(progressId, file.name, 'Uploaded');
                     } catch (error) {
                         console.log(error);
                         if (error.name === 'AbortError') {
@@ -93,7 +93,7 @@ Ext.define('FileManagement.components.forms.FileUploadForm', {
                             console.error('Error during upload:', error);
                         }
                         failedFiles.push(file.name);
-                        FileManagement.components.utils.ProgressBarManager.updateFileStatus(progressId, file.name, 'Failed');
+                        FileManagement.components.utils.ProgressBarManager.updateQueuedStatus(progressId, file.name, 'Failed');
                         Ext.Msg.alert('Error', `Failed to upload file: ${file.name}`);
                         break; // Stop processing on failure
                     }

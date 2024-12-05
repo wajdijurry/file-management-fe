@@ -41,6 +41,12 @@ Ext.define('FileManagement.components.utils.SocketManager', {
                 FileManagement.components.utils.ProgressBarManager.updateProgress('download', 100, 'Download Complete');
                 FileManagement.components.utils.ProgressBarManager.removeProgressBar('download');
             });
+
+            // Listen for moving progress
+            this.socket.on('movingProgress', (data) => {
+                FileManagement.components.utils.ProgressBarManager.updateProgress(data.progressId, data.progress, `Moving ${data.itemName} (${data.progress}%)`);
+                FileManagement.components.utils.ProgressBarManager.updateQueuedStatus(data.progressId, data.itemName, 'Moved');
+            });
         }
     }
 });

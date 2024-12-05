@@ -4,7 +4,7 @@ Ext.define('FileManagement.components.viewers.ViewerFactory', {
 
     createViewer: function(record) {
         const fileType = record.get('mimetype');
-        const filePath = record.get('_id');
+        const filePath = record.get('id');
         const fileName = record.get('name');
         const fileUrl = `http://localhost:5000/api/files/view/${filePath}`;
         const mainPanel = Ext.getCmp('mainPanelRegion');
