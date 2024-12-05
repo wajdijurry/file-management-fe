@@ -25,7 +25,14 @@ Ext.define('FileManagement.components.dialogs.SetPasswordDialog', {
         fieldLabel: 'Password',
         inputType: 'password',
         allowBlank: false,
-        width: '100%'
+        width: '100%',
+        listeners: {
+            specialkey: function(field, e) {
+                if (e.getKey() === e.ENTER) {
+                    field.up('window').down('textfield[name=confirmPassword]').focus();
+                }
+            }
+        }
     }, {
         xtype: 'textfield',
         name: 'confirmPassword',
@@ -36,6 +43,15 @@ Ext.define('FileManagement.components.dialogs.SetPasswordDialog', {
         validator: function(value) {
             const password = this.up('window').down('textfield[name=password]').getValue();
             return value === password ? true : 'Passwords do not match';
+        },
+        listeners: {
+            specialkey: function(field, e) {
+                if (e.getKey() === e.ENTER) {
+                    const win = field.up('window');
+                    const setPasswordBtn = win.down('button[text=Set Password]');
+                    setPasswordBtn.handler.call(setPasswordBtn, setPasswordBtn);
+                }
+            }
         }
     }],
 
@@ -69,8 +85,8 @@ Ext.define('FileManagement.components.dialogs.SetPasswordDialog', {
                     const result = Ext.JSON.decode(response.responseText);
                     if (result.success) {
                         Ext.Msg.alert('Success', 'Password set successfully.');
-                        if (win.getOnSuccess) {
-                            win.getOnSuccess();
+                        if (win.onSuccess) {
+                            win.onSuccess();
                         }
                         win.close();
                     } else {

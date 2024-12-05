@@ -141,17 +141,34 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             {
                 xtype: 'textfield',
                 emptyText: 'Search by name...',
+                itemId: 'searchField',
+                triggers: {
+                    clear: {
+                        cls: 'x-form-clear-trigger',
+                        hidden: true,
+                        handler: function(field) {
+                            var grid = field.up('gridpanel');
+                            field.setValue('');
+                            grid.getStore().clearFilter();
+                        }
+                    }
+                },
                 listeners: {
                     change: function(field, newValue) {
                         var grid = field.up('gridpanel');
                         var store = grid.getStore();
+                        var clearTrigger = field.getTrigger('clear');
+                        
                         store.clearFilter();
                         if (newValue) {
                             store.filterBy(function(record) {
                                 return record.get('name').toLowerCase().includes(newValue.toLowerCase());
                             });
+                            clearTrigger.show();
+                        } else {
+                            clearTrigger.hide();
                         }
-                    }, // Adjust delay (300ms here) as needed,
+                    },
                     scope: this
                 }
             },
@@ -261,7 +278,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 }
             },
             {
-                xtype: 'button',
                 text: 'Download',
                 iconCls: 'fa fa-download',
                 id: 'downloadButton',
@@ -919,10 +935,9 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     //     this.up('filegrid').moveItem(record, targetFolderId);
                     // });
 
-                    this.up('filegrid').moveItem(draggedRecords, {
-                        id: overModel.get('id'),
-                        name: overModel.get('name')
-                    });
+                    console.log(overModel);
+
+                    this.up('filegrid').moveItem(draggedRecords, overModel);
                 // } else {
                 //     Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder.');
                 // }
@@ -992,14 +1007,11 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                         mask.show();
 
                         // Use the moveItem function
-                        fileGrid.moveItem(selectedItems, {
-                            id: selectedNode.get('id'),
-                            name: selectedNode.get('text')
-                        }).then(function(response) {
+                        fileGrid.moveItem(selectedItems, selectedNode)
+                        .then(function(response) {
                             mask.hide();
                             window.close();
                             fileGrid.getStore().reload();
-                            Ext.Msg.alert('Success', 'Items moved successfully.');
                         }).catch(function(error) {
                             mask.hide();
                             Ext.Msg.alert('Error', error);

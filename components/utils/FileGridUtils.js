@@ -135,7 +135,7 @@ Ext.define('FileManagement.components.utils.FileGridUtils', {
     },
 
     handleItemAccess: function(record, callback) {
-        if (record.get('isPasswordProtected')) {
+        if (record.get('isLocked')) {
             // Show password prompt dialog
             Ext.create('FileManagement.components.dialogs.PasswordPromptDialog', {
                 itemId: record.get('id'),
@@ -150,18 +150,20 @@ Ext.define('FileManagement.components.utils.FileGridUtils', {
     },
 
     moveItem: function(selectedItems, targetRecord) {
+        if (!targetRecord || !targetRecord.get('id')) {
+            reject('Invalid target folder');
+            return;
+        }
+
         const token = localStorage.getItem('token');
+        const targetFolderId = targetRecord.get('id');
+        const targetFolderName = targetRecord.get('name') || targetRecord.get('text');
         
         return new Promise((resolve, reject) => {
-            if (!targetRecord || !targetRecord.id) {
-                reject('Invalid target folder');
-                return;
-            }
-
-            const isTargetZip = targetRecord.name ? targetRecord.name.endsWith('.zip') : false;
+            const isTargetZip = targetFolderName ? targetFolderName.endsWith('.zip') : false;
             const confirmMessage = isTargetZip ? 
-                `Move items into "${targetRecord.name}"?` :
-                `Move items to "${targetRecord.name}"?`;
+                `Move items into "${targetFolderName}"?` :
+                `Move items to "${targetFolderName}"?`;
 
             // First check if target is password protected
             this.handleItemAccess(targetRecord, () => {
@@ -170,7 +172,7 @@ Ext.define('FileManagement.components.utils.FileGridUtils', {
                         // Prepare the data for the move operation
                         const moveData = {
                             itemIds: selectedItems.map(item => item.get('id')),
-                            targetId: targetRecord.id,
+                            targetId: targetFolderId,
                             isTargetZip: isTargetZip,
                             progressId: `moving-${Date.now()}`
                         };

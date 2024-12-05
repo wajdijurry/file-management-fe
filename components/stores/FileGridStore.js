@@ -148,75 +148,16 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
         });
     },
 
-    compressSelected: function(grid, selection, currentFolderId, currentFolder) {
-        // Prompt for zip file name
-        Ext.Msg.prompt('Zip File Name', 'Enter the name for the zip file:', async function(btn, text) {
-            if (btn === 'ok' && text) {
-                const token = FileManagement.helpers.Functions.getToken();
-                const zipFileName = text.endsWith('.zip') ? text : `${text}.zip`;
-                const selectedItems = selection.map(record => record.get('path').split('/').slice(1).join('/'));
-
-                const abortController = new AbortController();
-                const signal = abortController.signal;
-                // const progressId = `compression-progress-${Date.now()}`;
-                FileManagement.components.utils.ProgressBarManager.addProgressBar('compression', `Compress ${zipFileName}`, [], function () {
-                    abortController.abort(); // Abort ongoing requests
-                    // Notify the backend to stop the compression process
-                    fetch('http://localhost:5000/api/files/stop-compression', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            zipFileName,
-                            folder: currentFolder,
-                            parentId: currentFolderId
-                        })
-                    }).catch(() => {
-                        Ext.Msg.alert('Error', 'Failed to cancel compression on the server.');
-                    });
-                }, false);
-
-                if (selectedItems.length === 0) {
-                    Ext.Msg.alert('Error', 'No items selected for compression.');
-                    return;
-                }
-
-                try {
-                    const response = await fetch('http://localhost:5000/api/files/compress', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            items: selectedItems,
-                            folder: currentFolder,
-                            zipFileName: zipFileName,
-                            parentId: currentFolderId
-                        }),
-                        signal
-                    })
-
-                    if (!response.ok) {
-                        Ext.Msg.alert('Error', 'Failed to compress files');
-                        throw new Error('Failed to download chunk.');
-                    }
-
-                    Ext.Msg.alert('Success', 'Files compressed successfully.');
-                    grid.getStore().reload();
-                } catch (error) {
-                    if (error.name === 'AbortError') {
-                        console.log('Compression aborted by user.');
-                    } else {
-                        console.error('Error during compression:', error);
-                        Ext.Msg.alert('Error', 'Compression failed.');
-                    }
-                } finally {
-                    FileManagement.components.utils.ProgressBarManager.removeProgressBar('compression');
-                }
+    compressSelected: function(grid, selections, currentFolderId, currentFolder) {        
+        Ext.create('FileManagement.components.dialogs.CompressionDialog', {
+            selections,
+            currentFolderId: currentFolderId,
+            currentFolder: currentFolder,
+            onSuccess: function() {
+                console.log('khaldoon');
+                
+                grid.getStore().reload();
             }
-        });
+        }).show();
     }
 });

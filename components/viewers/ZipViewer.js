@@ -136,7 +136,7 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
 
     loadZipContents: async function() {
         this.setLoading({
-            msg: 'Starting download...',
+            msg: 'Opening zip file...',
             useTargetEl: true
         });
 
