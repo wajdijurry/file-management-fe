@@ -32,12 +32,13 @@ Ext.define('FileManagement.components.forms.auth.LoginForm', {
                         form.submit({
                             url: 'http://localhost:5000/api/auth/login',
                             success: function(form, action) {
-                                const { token, username } = action.result;
+                                const { token, username, userId } = action.result;
                                 const rememberMe = form.findField('rememberMe').getValue();
 
-                                // Store the token and username
+                                // Store the token, username, and userId
                                 localStorage.setItem('token', token);
                                 localStorage.setItem('username', username);
+                                localStorage.setItem('userId', userId);
 
                                 // Reload the application to ensure updates
                                 Ext.Msg.alert('Success', 'Logged in successfully', function() {

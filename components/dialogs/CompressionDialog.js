@@ -16,6 +16,53 @@ Ext.define('FileManagement.components.dialogs.CompressionDialog', {
         onSuccess: null
     },
 
+    initComponent: function() {
+        this.callParent(arguments);
+
+        // Get socket instance from SocketManager
+        const socket = FileManagement.components.utils.SocketManager.socket;
+
+        if (!socket) {
+            console.error('Socket connection not initialized');
+            return;
+        }
+
+        socket.on('connect', () => {
+            console.log('Socket connected for compression updates');
+        });
+
+        socket.on('connect_error', (error) => {
+            console.error('Socket connection error:', error);
+        });
+
+        socket.on('compressionProgress', (data) => {
+            FileManagement.components.utils.ProgressBarManager.updateProgress(
+                data.progressId,
+                data.progress,
+                `Compressing to ${data.fileName}...`
+            );
+        });
+
+        socket.on('compressionComplete', (data) => {
+            FileManagement.components.utils.ProgressBarManager.removeProgressBar(data.progressId);
+            
+            // Refresh the file grid
+            const fileGrid = Ext.ComponentQuery.query('filegrid')[0];
+            if (fileGrid && fileGrid.getStore()) {
+                fileGrid.getStore().reload();
+            }
+
+            if (typeof this.onSuccess === 'function') {
+                this.onSuccess();
+            }
+        });
+
+        socket.on('compressionError', (data) => {
+            FileManagement.components.utils.ProgressBarManager.removeProgressBar(data.progressId);
+            Ext.Msg.alert('Compression Error', `Failed to compress files: ${data.error}`);
+        });
+    },
+
     items: [{
         xtype: 'textfield',
         fieldLabel: 'Archive Name',
@@ -27,12 +74,26 @@ Ext.define('FileManagement.components.dialogs.CompressionDialog', {
         fieldLabel: 'Archive Type',
         name: 'archiveType',
         store: [
-            ['zip', 'ZIP (.zip)'],
-            ['7z', '7-Zip (.7z)']
+            ['7z', '7-Zip (.7z) - Best compression'],
+            ['zip', 'ZIP (.zip) - Universal compatibility'],
+            ['tgz', 'TGZ (.tar.gz) - Unix/Linux compatible']
         ],
-        value: 'zip',
+        value: '7z',
         editable: false,
-        width: '100%'
+        width: '100%',
+        listeners: {
+            change: function(combo, newValue) {
+                const nameField = combo.up('window').down('[name=archiveName]');
+                const currentName = nameField.getValue();
+                const baseName = currentName.substring(0, currentName.lastIndexOf('.')) || currentName;
+                const ext = {
+                    '7z': '.7z',
+                    'zip': '.zip',
+                    'tgz': '.tar.gz'
+                }[newValue] || '.7z';
+                nameField.setValue(baseName + ext);
+            }
+        }
     }, {
         xtype: 'slider',
         fieldLabel: 'Compression Level',
@@ -66,7 +127,7 @@ Ext.define('FileManagement.components.dialogs.CompressionDialog', {
     }, {
         text: 'Compress',
         handler: function(btn) {
-            const win = btn.up('window');
+            const win = this.up('window');
             const values = {
                 archiveName: win.down('[name=archiveName]').getValue(),
                 archiveType: win.down('[name=archiveType]').getValue(),
@@ -82,37 +143,20 @@ Ext.define('FileManagement.components.dialogs.CompressionDialog', {
             const fileName = values.archiveName.endsWith('.' + values.archiveType) 
                 ? values.archiveName 
                 : `${values.archiveName}.${values.archiveType}`;
-            const selectedItems = win.selections.map(record => ({
-                id: record.get('id'),
-                type: record.get('isFolder') ? 'folder' : 'file',
-                name: record.get('name')
-            }));
+            const selectedItems = win.selections.map(record => record.get('id'));
 
-            const abortController = new AbortController();
-            const signal = abortController.signal;
+            // Generate unique progress ID using timestamp and random number
+            const progressId = `compression-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
             // Add progress bar for compression
             FileManagement.components.utils.ProgressBarManager.addProgressBar(
-                'compression', 
+                progressId, 
                 `Compressing to ${fileName}...`, 
-                selectedItems.map(item => ({ fileName: item.name, status: 'Queued' })),
-                function () {
-                    abortController.abort();
-                    fetch('http://localhost:5000/api/files/stop-compression', {
-                        method: 'POST',
-                        headers: {
-                            'Authorization': `Bearer ${token}`,
-                            'Content-Type': 'application/json',
-                        },
-                        body: JSON.stringify({
-                            zipFileName: fileName,
-                            folder: win.currentFolder,
-                            parentId: win.currentFolderId
-                        })
-                    }).catch(() => {
-                        Ext.Msg.alert('Error', 'Failed to cancel compression on the server.');
-                    });
-                }, 
+                win.selections.map(record => ({ 
+                    fileName: record.get('name'), 
+                    status: 'Queued' 
+                })),
+                null,  // No cancel callback needed
                 false
             );
 
@@ -131,32 +175,24 @@ Ext.define('FileManagement.components.dialogs.CompressionDialog', {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    items: selectedItems.map(item => item.id),
+                    items: selectedItems,
                     folder: win.currentFolder,
                     parentId: win.currentFolderId,
                     zipFileName: fileName,
                     archiveType: values.archiveType,
-                    compressionLevel: values.compressionLevel
-                }),
-                signal
+                    compressionLevel: values.compressionLevel,
+                    progressId: progressId // Pass the progress ID to backend
+                })
             })
             .then(response => response.json())
             .then(result => {
-                if (result.success) {
-                    if (typeof win.onSuccess === 'function') {
-                        console.log('vxcvcv');
-                        win.onSuccess();
-                    }
-                } else {
-                    throw new Error(result.error || 'Compression failed');
+                if (!result.success) {
+                    throw new Error(result.error || 'Failed to start compression');
                 }
             })
             .catch(error => {
-                if (error.name === 'AbortError') {
-                    Ext.Msg.alert('Compression Cancelled', 'The compression operation was cancelled.');
-                } else {
-                    Ext.Msg.alert('Compression Error', `Failed to compress files: ${error.message}`);
-                }
+                FileManagement.components.utils.ProgressBarManager.removeProgressBar(progressId);
+                Ext.Msg.alert('Compression Error', `Failed to start compression: ${error.message}`);
             });
         }
     }],

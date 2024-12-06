@@ -94,7 +94,7 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
                     iconCls: 'fa fa-clock',
                     hidden: !showQueueButton,
                     enableToggle: true,
-                    toggleGroup: `progress-${id}`,
+                    toggleGroup: id, // Use the unique ID directly as the toggle group
                     toggleHandler: function (button, pressed) {
                         if (pressed) {
                             queueWindow.show();
@@ -121,7 +121,8 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
                     text: text,
                     width: 300,
                     value: 0,
-                    margin: '0 5 0 5'
+                    margin: '0 5 0 5',
+                    textTpl: '{text} ({percent:number("0")}%)'
                 }
             ]
         });
@@ -169,7 +170,12 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
 
         const progressBarComponent = progressBar.container.down('progressbar');
         progressBarComponent.show();
-        progressBarComponent.updateProgress(progress / 100, text || `${progress}%`);
+        const percentage = Math.round(progress);
+        progressBarComponent.updateProgress(
+            progress / 100, 
+            text ? `${text} (${percentage}%)` : `${percentage}%`,
+            true  // animate
+        );
 
         if (progress >= 100) {
             progressBarComponent.hide();

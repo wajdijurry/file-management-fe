@@ -39,7 +39,7 @@ Ext.define('FileManagement.components.viewers.ViewerFactory', {
             });
         } else {
             Ext.Msg.alert('Unsupported File Type', 'The selected file type is not supported for viewing.');
-            throw new Error('Unsupported File Type\', \'The selected file type is not supported for viewing: ' + fileType);
+            return;
         }
 
         viewer.show = function () {

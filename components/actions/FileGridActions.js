@@ -57,22 +57,52 @@ Ext.define('FileManagement.components.actions.FileGridActions', {
     },
 
     onViewFile: function(grid, record) {
-        if (!record || record.get('type') !== 'file') return;
-
-        const token = localStorage.getItem('token');
-        const filePath = record.get('path');
-        
-        Ext.Ajax.request({
-            url: 'http://localhost:5000/api/files/view',
-            method: 'GET',
-            params: { filePath: filePath },
-            headers: { 'Authorization': `Bearer ${token}` },
-            success: function(response) {
-                // Handle file viewing based on file type
-                const fileContent = response.responseText;
-                // Implementation depends on file type and viewing requirements
+        if (!record) {
+            record = grid.getSelectionModel().getSelection()[0];
+            if (!record) {
+                Ext.Msg.alert('Error', 'No file selected.');
+                return;
             }
-        });
+        }
+
+        if (record.get('isFolder')) {
+            Ext.Msg.alert('Error', 'Cannot view folders. Please select a file.');
+            return;
+        }
+
+        const fileId = record.get('id');
+        const mainPanel = Ext.getCmp('mainPanelRegion');
+
+        if (!mainPanel) {
+            Ext.Msg.alert('Error', 'Main panel not found.');
+            return;
+        }
+
+        try {
+            // Check if a viewer for this file is already open
+            const existingViewer = mainPanel.items.findBy(item => item.fileId === fileId);
+            if (existingViewer) {
+                existingViewer.setStyle({ zIndex: ++window.highestZIndex });
+                existingViewer.show();
+                existingViewer.toFront();
+                return;
+            }
+
+            // Create and add the new viewer panel
+            const viewer = FileManagement.components.viewers.ViewerFactory.createViewer(record);
+            if (viewer) {
+                viewer.fileId = fileId; // Tag the panel with the file ID for tracking
+                viewer.show(); // Add the viewer to the main panel
+
+                const toolbar = Ext.ComponentQuery.query('userToolbar')[0];
+                if (toolbar) {
+                    toolbar.addPanelToggleButton(viewer, record.get('name'), record.get('icon'));
+                }
+            }
+        } catch (error) {
+            console.error('Error viewing file:', error);
+            Ext.Msg.alert('Error', error.message || 'Failed to view file. Please try again.');
+        }
     },
 
     onOpenFolder: function(grid, record) {

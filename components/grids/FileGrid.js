@@ -502,7 +502,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     iconCls: 'fa fa-unlock',
                     handler: function(item) {
                         const record = me.getSelectionModel().getSelection()[0];
-                        if (record && record.get('isLocked')) {
+                        if (record && (record.get('isLocked') || record.get('isPasswordProtected'))) {
                             const passwordWindow = Ext.create('Ext.window.Window', {
                                 title: 'Remove Password',
                                 modal: true,
@@ -660,7 +660,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     setPasswordMenuItem.setDisabled(selection.length !== 1);
 
                     const removePasswordMenuItem = menu.down('#removePasswordMenuItem');
-                    removePasswordMenuItem.setDisabled(selection.length !== 1 || !selection[0].get('isLocked'));
+                    removePasswordMenuItem.setDisabled(selection.length !== 1 || !selection[0].get('isPasswordProtected'));
 
                     return true;
                 },
@@ -725,6 +725,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
     // Handler for "View" option (for files)
     onViewFile: function(record) {
+        console.log(record);
         FileManagement.components.actions.FileGridActions.onViewFile(this, record);
     },
 
