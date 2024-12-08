@@ -156,7 +156,31 @@ Ext.define('FileManagement.components.dialogs.CompressionDialog', {
                     fileName: record.get('name'), 
                     status: 'Queued' 
                 })),
-                null,  // No cancel callback needed
+                function(progressId) {
+                    // Send cancel signal to backend
+                    fetch('http://localhost:5000/api/files/stop-compression', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({
+                            zipFileName: fileName,
+                            folder: win.currentFolder || '',
+                            parentId: win.currentFolderId || null
+                        })
+                    })
+                    .then(response => response.json())
+                    .then(result => {
+                        if (!result.success) {
+                            throw new Error(result.error || 'Failed to stop compression');
+                        }
+                    })
+                    .catch(error => {
+                        console.error('Error stopping compression:', error);
+                        Ext.Msg.alert('Error', `Failed to stop compression: ${error.message}`);
+                    });
+                },
                 false
             );
 

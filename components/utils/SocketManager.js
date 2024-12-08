@@ -45,6 +45,19 @@ Ext.define('FileManagement.components.utils.SocketManager', {
                 FileManagement.components.utils.ProgressBarManager.removeProgressBar(data.progressId);
             });
 
+            // Listen for compression errors
+            this.socket.on('compressionError', (data) => {
+                FileManagement.components.utils.ProgressBarManager.removeProgressBar(data.progressId);
+                
+                // Show error in a user-friendly dialog
+                Ext.Msg.show({
+                    title: 'Compression Error',
+                    message: data.error || 'An error occurred during compression',
+                    buttons: Ext.Msg.OK,
+                    icon: Ext.Msg.ERROR
+                });
+            });
+
             // Listen for download progress
             this.socket.on('downloadProgress', (data) => {
                 FileManagement.components.utils.ProgressBarManager.updateProgress(
@@ -76,6 +89,14 @@ Ext.define('FileManagement.components.utils.SocketManager', {
 
             this.socket.on('connect_error', (error) => {
                 console.error('Socket connection error:', error);
+                
+                // Show connection error to user
+                Ext.Msg.show({
+                    title: 'Connection Error',
+                    message: 'Lost connection to server. Please check your internet connection.',
+                    buttons: Ext.Msg.OK,
+                    icon: Ext.Msg.WARNING
+                });
             });
         }
     }

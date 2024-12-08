@@ -1,4 +1,10 @@
 Ext.define('FileManagement.components.actions.FileGridActions', {
+    extend: 'Ext.panel.Panel',
+    requires: [
+        'FileManagement.components.utils.PasswordPromptUtil',
+        'FileManagement.components.viewers.ViewerFactory',
+        'FileManagement.components.utils.AccessTracker'
+    ],
     singleton: true,
 
     onDeleteFiles: function(grid) {
@@ -88,11 +94,32 @@ Ext.define('FileManagement.components.actions.FileGridActions', {
                 return;
             }
 
-            // Create and add the new viewer panel
+            // Check if file is password protected and not already verified
+            if (record.get('isPasswordProtected') && !FileManagement.components.utils.AccessTracker.isItemVerified(fileId)) {
+                FileManagement.components.utils.PasswordPromptUtil.showPasswordPrompt({
+                    itemId: fileId,
+                    isFolder: false,
+                    onSuccess: () => {
+                        this.createAndShowViewer(mainPanel, record);
+                    }
+                });
+            } else {
+                this.createAndShowViewer(mainPanel, record);
+            }
+        } catch (error) {
+            console.error('Error viewing file:', error);
+            Ext.Msg.alert('Error', 'Failed to view file.');
+        }
+    },
+
+    createAndShowViewer: function(mainPanel, record) {
+        const fileId = record.get('id');
+        try {
+            // Create and show viewer after password verification
             const viewer = FileManagement.components.viewers.ViewerFactory.createViewer(record);
             if (viewer) {
-                viewer.fileId = fileId; // Tag the panel with the file ID for tracking
-                viewer.show(); // Add the viewer to the main panel
+                viewer.fileId = fileId;
+                viewer.show();
 
                 const toolbar = Ext.ComponentQuery.query('userToolbar')[0];
                 if (toolbar) {
@@ -106,11 +133,41 @@ Ext.define('FileManagement.components.actions.FileGridActions', {
     },
 
     onOpenFolder: function(grid, record) {
-        if (!record || record.get('type') !== 'folder') return;
-        
+        if (!record) {
+            record = grid.getSelectionModel().getSelection()[0];
+            if (!record) {
+                Ext.Msg.alert('Error', 'No folder selected.');
+                return;
+            }
+        }
+
+        if (!record.get('isFolder')) {
+            Ext.Msg.alert('Error', 'Selected item is not a folder.');
+            return;
+        }
+
         const folderId = record.get('id');
-        const folderName = record.get('name');
-        grid.loadFolderContents(folderName, folderId);
+        
+        try {
+            // Check if folder is password protected and not already verified
+            if (record.get('isPasswordProtected') && !FileManagement.components.utils.AccessTracker.isItemVerified(folderId)) {
+                FileManagement.components.utils.PasswordPromptUtil.showPasswordPrompt({
+                    itemId: folderId,
+                    isFolder: true,
+                    onSuccess: () => {
+                        grid.loadFolderContents(record.get('name'), folderId);
+                    },
+                    onFailure: (response) => {
+                        console.error('Failed to verify folder password:', response);
+                    }
+                });
+            } else {
+                grid.loadFolderContents(record.get('name'), folderId);
+            }
+        } catch (error) {
+            console.error('Error opening folder:', error);
+            Ext.Msg.alert('Error', 'Failed to open folder.');
+        }
     },
 
     onCompressSelectedFiles: function(grid) {

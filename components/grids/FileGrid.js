@@ -1,6 +1,13 @@
 Ext.define('FileManagement.components.grids.FileGrid', {
     extend: 'Ext.grid.Panel',
     alias: 'widget.filegrid',
+    requires: [
+        'FileManagement.components.utils.PanelUtils',
+        'FileManagement.components.utils.FileGridUtils',
+        'FileManagement.components.actions.FileGridActions',
+        'FileManagement.components.utils.PasswordPromptUtil',
+        'FileManagement.components.utils.AccessTracker'
+    ],
 
     title: 'Files Explorer',
 
@@ -12,14 +19,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
     currentFolder: '',
     currentFolderPath: [], // Store the folder path segments
     userId: null, // Store the user ID to represent the root directory
-
-    requires: [
-        'FileManagement.components.utils.PanelUtils',
-        'FileManagement.components.utils.FileGridUtils',
-        'FileManagement.components.actions.FileGridActions'
-    ],
-
-    // floating: true, // Enables ZIndexManager for bringToFront
 
     draggable: {
         onMouseUp: function(e, panel) {
@@ -135,12 +134,135 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         startCollapsed: true
     }],
 
-    // Add a toolbar for bulk actions
+    // Main toolbar with action buttons
     tbar: {
+        xtype: 'toolbar',
+        enableOverflow: true,
+        items: [
+            {
+                text: 'Move Selected',
+                iconCls: 'fa fa-arrows-alt',
+                id: 'moveItemsButton',
+                disabled: true,
+                handler: function () {
+                    const grid = this.up('grid');
+                    grid.moveItemsHandler(arguments);
+                }
+            },
+            {
+                text: 'Download',
+                iconCls: 'fa fa-download',
+                id: 'downloadButton',
+                disabled: true,
+                handler: async function() {
+                    const grid = this.up('gridpanel');
+                    const selection = grid.getSelectionModel().getSelection();
+
+                    if (selection.length === 0) {
+                        Ext.Msg.alert('Error', 'Please select at least one file to download.');
+                        return;
+                    }
+
+                    const token = FileManagement.helpers.Functions.getToken();
+
+                    if (selection.length === 1) {
+                        const file = selection[0];
+                        const filePath = file.get('path');
+                        const fileName = file.get('name');
+                        const chunkSize = 2 * 1024 * 1024;
+
+                        await grid.downloadFileInChunks(filePath, fileName, token, chunkSize);
+                    } else {
+                        Ext.Msg.prompt('Zip File Name', 'Enter the name of the zip file:', async function(btn, zipFileName) {
+                            if (btn === 'ok' && zipFileName) {
+                                let filePaths = selection.map(record => record.get('path'));
+                                filePaths = filePaths.map(path => path.split('/').slice(1).join('/'));
+                                zipFileName = zipFileName.endsWith('.zip') ? zipFileName : `${zipFileName}.zip`
+
+                                const abortController = new AbortController();
+                                const signal = abortController.signal;
+
+                                FileManagement.components.utils.ProgressBarManager.addProgressBar('compression', `Compressing ${zipFileName}`, [], function () {
+                                    abortController.abort();
+                                    fetch('http://localhost:5000/api/files/stop-compression', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({
+                                            zipFileName,
+                                            folder: grid.currentFolder,
+                                            parentId: grid.currentFolderId
+                                        })
+                                    }).catch(() => {
+                                        Ext.Msg.alert('Error', 'Failed to cancel compression on the server.');
+                                    });
+                                }, false);
+
+                                try {
+                                    const response = await fetch('http://localhost:5000/api/files/compress', {
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${token}`,
+                                            'Content-Type': 'application/json',
+                                        },
+                                        body: JSON.stringify({
+                                            items: filePaths,
+                                            zipFileName,
+                                            folder: grid.currentFolder,
+                                            parentId: grid.currentFolderId
+                                        }),
+                                        signal
+                                    });
+
+                                    if (!response.ok) {
+                                        throw new Error('Failed to create ZIP file.');
+                                    }
+
+                                    FileManagement.components.utils.ProgressBarManager.removeProgressBar('compression');
+
+                                    const zipFile = await response.json();
+                                    let zipFilePath = zipFile.file.path;
+
+                                    await grid.downloadFileInChunks(zipFilePath, `${zipFileName}`, token, 2 * 1024 * 1024);
+                                } catch (error) {
+                                    if (error.name === 'AbortError') {
+                                        console.log('Compression aborted by user.');
+                                    } else {
+                                        console.error('Error during compression:', error);
+                                        Ext.Msg.alert('Error', `Failed to download ZIP: ${error.message}`);
+                                    }
+                                }
+                            }
+                        });
+                    }
+                }
+            },
+            {
+                text: 'Compress Selected',
+                iconCls: 'fa fa-compress',
+                id: 'compressButton',
+                disabled: true,
+                handler: function() {
+                    const grid = this.up('grid');
+                    grid.onCompressSelectedFiles(grid);
+                }
+            }
+        ]
+    },
+
+    // Sub toolbar with file management
+    dockedItems: [{
+        xtype: 'toolbar',
+        dock: 'top',
+        cls: 'sub-toolbar',
+        enableOverflow: true,
         items: [
             {
                 xtype: 'textfield',
                 emptyText: 'Search by name...',
+                width: 200,
                 itemId: 'searchField',
                 triggers: {
                     clear: {
@@ -208,24 +330,20 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     let uploadForm = Ext.ComponentQuery.query('fileuploadform')[0];
 
                     if (!uploadForm) {
-                        // Create the FileUploadForm if it doesn't exist
                         uploadForm = Ext.create('FileManagement.components.forms.FileUploadForm', {
                             x: '50%',
                             y: '50%'
                         });
                         mainPanelRegion.add(uploadForm);
                     } else {
-                        // Toggle visibility if it already exists
                         uploadForm.setVisible(!uploadForm.isVisible());
                     }
 
-                    // Ensure upload form is above FileGrid by setting a higher z-index
                     if (uploadForm.isVisible()) {
-                        const uploadFormZIndex = parseInt(this.getEl().getStyle('z-index'), 10) + 1 || 1000; // Set to be above current
+                        const uploadFormZIndex = parseInt(this.getEl().getStyle('z-index'), 10) + 1 || 1000;
                         uploadForm.getEl().setStyle('z-index', uploadFormZIndex);
                     }
 
-                    // Refresh navigation panel when the upload form is shown
                     const navPanel = Ext.ComponentQuery.query('navigationpanel')[0];
                     if (navPanel) navPanel.refreshPanelList();
                 }
@@ -236,9 +354,8 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 handler: function () {
                     Ext.Msg.prompt('New Folder', 'Enter folder name:', function (btn, folderName) {
                         if (btn === 'ok' && folderName) {
-                            const parentFolderId = this.up('grid').currentFolderId || null; // Get the current folder ID or set to null for root
-                            console.log(parentFolderId);
-
+                            const parentFolderId = this.up('grid').currentFolderId || null;
+                            
                             Ext.Ajax.request({
                                 url: 'http://localhost:5000/api/files/create-folder',
                                 method: 'POST',
@@ -257,141 +374,35 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                     let error = JSON.parse(response.responseText).message;
                                     Ext.Msg.alert('Error', error ?? 'Failed to create folder');
                                 },
-                                scope: this // Preserve the context
+                                scope: this
                             });
                         }
                     }, this);
                 }
-            },
-            {
-                xtype: 'tbseparator'
-            },
-            {
-                text: 'Compress Selected',
-                iconCls: 'fa fa-compress',
-                id: 'compressButton',
-                disabled: true, // Initially disabled
-                handler: function() {
-                    const grid = this.up('grid');
-
-                    grid.onCompressSelectedFiles(grid);
-                }
-            },
-            {
-                text: 'Download',
-                iconCls: 'fa fa-download',
-                id: 'downloadButton',
-                disabled: true, // Initially disabled
-                handler: async function() {
-                    const grid = this.up('gridpanel'); // Access the FileGrid
-                    const selection = grid.getSelectionModel().getSelection(); // Get selected items
-
-                    if (selection.length === 0) {
-                        Ext.Msg.alert('Error', 'Please select at least one file to download.');
-                        return;
-                    }
-
-                    const token = FileManagement.helpers.Functions.getToken();
-
-                    if (selection.length === 1) {
-                        // Single file download
-                        const file = selection[0];
-                        const filePath = file.get('path');
-                        const fileName = file.get('name');
-                        const chunkSize = 2 * 1024 * 1024; // 10 MB
-
-                        await grid.downloadFileInChunks(filePath, fileName, token, chunkSize);
-                    } else {
-                        // Multiple file download as ZIP
-                        Ext.Msg.prompt('Zip File Name', 'Enter the name of the zip file:', async function(btn, zipFileName) {
-                            if (btn === 'ok' && zipFileName) {
-                                let filePaths = selection.map(record => record.get('path'));
-                                filePaths = filePaths.map(path => path.split('/').slice(1).join('/'));
-                                zipFileName = zipFileName.endsWith('.zip') ? zipFileName : `${zipFileName}.zip`
-
-                                const abortController = new AbortController();
-                                const signal = abortController.signal;
-
-                                // const progressId = `compression-progress-${Date.now()}`;
-                                FileManagement.components.utils.ProgressBarManager.addProgressBar('compression', `Compressing ${zipFileName}`, [], function () {
-                                    abortController.abort(); // Abort ongoing requests
-                                    // Notify the backend to stop the compression process
-                                    fetch('http://localhost:5000/api/files/stop-compression', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Authorization': `Bearer ${token}`,
-                                            'Content-Type': 'application/json',
-                                        },
-                                        body: JSON.stringify({
-                                            zipFileName,
-                                            folder: grid.currentFolder,
-                                            parentId: grid.currentFolderId
-                                        })
-                                    }).catch(() => {
-                                        Ext.Msg.alert('Error', 'Failed to cancel compression on the server.');
-                                    });
-                                }, false);
-
-                                try {
-                                    const response = await fetch('http://localhost:5000/api/files/compress', {
-                                        method: 'POST',
-                                        headers: {
-                                            'Authorization': `Bearer ${token}`,
-                                            'Content-Type': 'application/json',
-                                        },
-                                        body: JSON.stringify({
-                                            items: filePaths,
-                                            zipFileName,
-                                            folder: grid.currentFolder,
-                                            parentId: grid.currentFolderId
-                                        }),
-                                        signal
-                                    });
-
-                                    if (!response.ok) {
-                                        throw new Error('Failed to create ZIP file.');
-                                    }
-
-                                    FileManagement.components.utils.ProgressBarManager.removeProgressBar('compression');
-
-                                    const zipFile = await response.json();
-                                    let zipFilePath = zipFile.file.path;
-
-                                    // Download the ZIP in chunks
-                                    await grid.downloadFileInChunks(zipFilePath, `${zipFileName}`, token, 2 * 1024 * 1024); // 10 MB chunks
-                                } catch (error) {
-                                    if (error.name === 'AbortError') {
-                                        console.log('Compression aborted by user.');
-                                    } else {
-                                        console.error('Error during compression:', error);
-                                        Ext.Msg.alert('Error', `Failed to download ZIP: ${error.message}`);
-                                    }
-                                }
-                            }
-                        });
-                    }
-                }
-            },
-            {
-                text: 'Move Selected',
-                iconCls: 'fa fa-arrows-alt',
-                id: 'moveItemsButton',
-                disabled: true, // Initially disabled
-                handler: function () {
-                    const grid = this.up('grid');
-                    grid.moveItemsHandler(arguments);
-                }
-            },
-            {
-                xtype: 'tbfill' // Fills remaining space in the toolbar
             }
-        ],
-        enableOverflow: true
-    },
+        ]
+    }],
 
     // Initialize the component
     initComponent: function () {
         var me = this;
+
+        // Create items count text
+        me.itemsCountText = '0 items';
+
+        // Add listener for store data changes
+        me.on('afterrender', function() {
+            // Get reference to the count text component
+            const countText = me.down('tbtext[itemId=itemsCount]');
+            
+            me.getStore().on('datachanged', function() {
+                const count = me.getStore().getCount();
+                me.itemsCountText = `${count} item${count !== 1 ? 's' : ''}`;
+                if (countText) {
+                    countText.setText(me.itemsCountText);
+                }
+            });
+        });
 
         me.on('continueDecompression', (decision, zipFilePath, folderName, parentId) => {
             // debugger;
@@ -500,73 +511,38 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     text: 'Remove Password',
                     itemId: 'removePasswordMenuItem',
                     iconCls: 'fa fa-unlock',
+                    hidden: true,
                     handler: function(item) {
                         const record = me.getSelectionModel().getSelection()[0];
-                        if (record && (record.get('isLocked') || record.get('isPasswordProtected'))) {
-                            const passwordWindow = Ext.create('Ext.window.Window', {
-                                title: 'Remove Password',
-                                modal: true,
-                                width: 300,
-                                layout: 'form',
-                                padding: 10,
-                                items: [{
-                                    xtype: 'textfield',
-                                    inputType: 'password',
-                                    fieldLabel: 'Current Password',
-                                    name: 'password',
-                                    allowBlank: false,
-                                    width: '100%',
-                                    listeners: {
-                                        specialkey: function(field, e) {
-                                            if (e.getKey() === e.ENTER) {
-                                                passwordWindow.down('#submitButton').handler();
-                                            }
+                        if (record && record.get('isPasswordProtected')) {
+                            FileManagement.components.utils.PasswordPromptUtil.showPasswordPrompt({
+                                itemId: record.get('id'),
+                                isFolder: record.get('isFolder'),
+                                action: 'removePassword',
+                                onSuccess: function(password) {
+                                    // Remove password after verification
+                                    const token = FileManagement.helpers.Functions.getToken();
+                                    Ext.Ajax.request({
+                                        url: 'http://localhost:5000/api/files/password/remove',
+                                        method: 'POST',
+                                        headers: {
+                                            'Authorization': `Bearer ${token}`
+                                        },
+                                        jsonData: {
+                                            itemId: record.get('id'),
+                                            currentPassword: password,  // Password from the prompt
+                                            isFolder: record.get('isFolder')
+                                        },
+                                        success: function(response) {
+                                            me.getStore().reload();
+                                            Ext.Msg.alert('Success', 'Password removed successfully.');
+                                        },
+                                        failure: function(response) {
+                                            Ext.Msg.alert('Error', 'Failed to remove password.');
                                         }
-                                    }
-                                }],
-                                buttons: [{
-                                    text: 'Cancel',
-                                    handler: function() {
-                                        passwordWindow.close();
-                                    }
-                                }, {
-                                    text: 'Remove',
-                                    itemId: 'submitButton',
-                                    handler: function() {
-                                        const password = passwordWindow.down('textfield').getValue();
-                                        if (!password) {
-                                            Ext.Msg.alert('Error', 'Please enter the current password.');
-                                            return;
-                                        }
-
-                                        Ext.Ajax.request({
-                                            url: 'http://localhost:5000/api/files/password/remove',
-                                            method: 'POST',
-                                            jsonData: {
-                                                itemId: record.get('id'),
-                                                currentPassword: password,
-                                                isFolder: record.get('isFolder')
-                                            },
-                                            success: function(response) {
-                                                const result = Ext.JSON.decode(response.responseText);
-                                                if (result.success) {
-                                                    Ext.Msg.alert('Success', 'Password removed successfully.');
-                                                    me.getStore().reload();
-                                                    passwordWindow.close();
-                                                } else {
-                                                    Ext.Msg.alert('Error', 'Failed to remove password.');
-                                                }
-                                            },
-                                            failure: function() {
-                                                Ext.Msg.alert('Error', 'Failed to remove password.');
-                                            }
-                                        });
-                                    }
-                                }]
+                                    });
+                                }
                             });
-
-                            passwordWindow.show();
-                            passwordWindow.down('textfield').focus(true, 100);
                         }
                     }
                 },
@@ -587,33 +563,48 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                                     const token = FileManagement.helpers.Functions.getToken(); // Get the token for authorization
 
                                     if (zipFile && zipFile.get('mimetype') === 'application/zip') {
-                                        // Show a prompt dialog to ask for folder name
-                                        Ext.Msg.prompt('Decompress Folder', 'Enter the name of the folder to decompress into:', function(btn, folderName) {
-                                            if (btn === 'ok' && folderName) {
-                                                // Proceed with decompress request using the specified folder name
-                                                Ext.Ajax.request({
-                                                    url: 'http://localhost:5000/api/files/decompress',
-                                                    method: 'POST',
-                                                    headers: {
-                                                        'Authorization': `Bearer ${token}`,
-                                                        'Content-Type': 'application/json'
-                                                    },
-                                                    jsonData: {
-                                                        filePath: zipFile.get('path'),
-                                                        targetFolder: this.currentFolder ? this.currentFolder + '/' + folderName : folderName,
-                                                        parentId: this.currentFolderId
-                                                    },
-                                                    success: function(response) {
-                                                        Ext.Msg.alert('Success', 'File decompressed successfully.');
-                                                        grid.getStore().reload();
-                                                    },
-                                                    failure: function(response) {
-                                                        let responseJSON = JSON.parse(response.responseText);
-                                                        Ext.Msg.alert('Error', 'Failed to decompress file: ' + responseJSON.error);
-                                                    }
-                                                });
-                                            }
-                                        }, this);
+                                        const proceedWithDecompress = () => {
+                                            // Show a prompt dialog to ask for folder name
+                                            Ext.Msg.prompt('Decompress Folder', 'Enter the name of the folder to decompress into:', function(btn, folderName) {
+                                                if (btn === 'ok' && folderName) {
+                                                    // Proceed with decompress request using the specified folder name
+                                                    Ext.Ajax.request({
+                                                        url: 'http://localhost:5000/api/files/decompress',
+                                                        method: 'POST',
+                                                        headers: {
+                                                            'Authorization': `Bearer ${token}`,
+                                                            'Content-Type': 'application/json'
+                                                        },
+                                                        jsonData: {
+                                                            filePath: zipFile.get('path'),
+                                                            targetFolder: this.currentFolder ? this.currentFolder + '/' + folderName : folderName,
+                                                            parentId: this.currentFolderId
+                                                        },
+                                                        success: function(response) {
+                                                            Ext.Msg.alert('Success', 'File decompressed successfully.');
+                                                            grid.getStore().reload();
+                                                        },
+                                                        failure: function(response) {
+                                                            let responseJSON = JSON.parse(response.responseText);
+                                                            Ext.Msg.alert('Error', 'Failed to decompress file: ' + responseJSON.error);
+                                                        }
+                                                    });
+                                                }
+                                            }, this);
+                                        };
+
+                                        // Check if archive is password protected
+                                        if (zipFile.get('isPasswordProtected')) {
+                                            FileManagement.components.utils.PasswordPromptUtil.showPasswordPrompt({
+                                                itemId: zipFile.get('id'),
+                                                isFolder: false,
+                                                onSuccess: function() {
+                                                    proceedWithDecompress();
+                                                }
+                                            });
+                                        } else {
+                                            proceedWithDecompress();
+                                        }
                                     }
                                 },
                                 scope: this
@@ -630,6 +621,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     const selection = grid.getSelectionModel().getSelection();
                     const decompressMenuItem = menu.down('#decompressMenuItem');
                     const actionsMenu = menu.down('#actionsMenu');
+                    const removePasswordMenuItem = menu.down('#removePasswordMenuItem');
 
                     // Reset visibility
                     viewMenuItem.setHidden(true);
@@ -657,10 +649,9 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     renameMenuItem.setDisabled(selection.length !== 1);
 
                     const setPasswordMenuItem = menu.down('#setPasswordMenuItem');
-                    setPasswordMenuItem.setDisabled(selection.length !== 1);
+                    setPasswordMenuItem.setHidden(selection.length !== 1 || selection[0].get('isPasswordProtected'));
 
-                    const removePasswordMenuItem = menu.down('#removePasswordMenuItem');
-                    removePasswordMenuItem.setDisabled(selection.length !== 1 || !selection[0].get('isPasswordProtected'));
+                    removePasswordMenuItem.setHidden(selection.length !== 1 || !selection[0].get('isPasswordProtected'));
 
                     return true;
                 },
@@ -672,6 +663,14 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             bbar: {
                 overflowHandler: 'scroller',
                 items: [
+                    {
+                        xtype: 'tbtext',
+                        itemId: 'itemsCount',
+                        text: me.itemsCountText
+                    },
+                    {
+                        xtype: 'tbseparator'
+                    },
                     {
                         xtype: 'tbtext',
                         text: 'Path: '
@@ -824,28 +823,31 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
     // FileGrid.js
     onFileDoubleClick: function (record) {
-        const grid = Ext.ComponentQuery.query('filegrid')[0];
+        if (!record) return;
 
-        if (record.get('isLocked')) {
-            Ext.create('FileManagement.components.dialogs.PasswordPromptDialog', {
-                record,
-                onSuccess: function(record) {
-                    grid.handleItemDblClick(record);
+        const fileId = record.get('id');
+        
+        // Check if file/folder is password protected and not already verified
+        if (record.get('isPasswordProtected') && !FileManagement.components.utils.AccessTracker.isItemVerified(fileId)) {
+            FileManagement.components.utils.PasswordPromptUtil.showPasswordPrompt({
+                itemId: fileId,
+                isFolder: record.get('isFolder'),
+                action: 'removePassword',
+                onSuccess: () => {
+                    this.handleItemDblClick(record);
                 }
-            }).show();
-
-            return false;
+            });
+        } else {
+            this.handleItemDblClick(record);
         }
-
-        this.handleItemDblClick(record);
     },
 
     handleItemDblClick: function (record) {
         if (record.get('isFolder')) {
             this.loadFolderContents(record.get('name'), record.get('id'));
         } else {
-            const fileId = record.get('id'); // Unique identifier for the file
-            const mainPanel = Ext.getCmp('mainPanelRegion'); // Parent container reference
+            const fileId = record.get('id');
+            const mainPanel = Ext.getCmp('mainPanelRegion');
 
             if (!mainPanel) {
                 Ext.Msg.alert('Error', 'Main panel not found.');
@@ -856,16 +858,21 @@ Ext.define('FileManagement.components.grids.FileGrid', {
             const existingViewer = mainPanel.items.findBy(item => item.fileId === fileId);
             if (existingViewer) {
                 existingViewer.setStyle({ zIndex: ++window.highestZIndex });
+                existingViewer.show();
+                existingViewer.toFront();
                 return;
             }
 
             // Create and add the new viewer panel
             const viewer = FileManagement.components.viewers.ViewerFactory.createViewer(record);
             if (viewer) {
-                viewer.fileId = fileId; // Tag the panel with the file ID for tracking
-                viewer.show(); // Add the viewer to the main panel
+                viewer.fileId = fileId;
+                viewer.show();
 
-                Ext.ComponentQuery.query('userToolbar')[0].addPanelToggleButton(viewer, record.get('name'), record.get('icon'));
+                const toolbar = Ext.ComponentQuery.query('userToolbar')[0];
+                if (toolbar) {
+                    toolbar.addPanelToggleButton(viewer, record.get('name'), record.get('icon'));
+                }
             }
         }
     },

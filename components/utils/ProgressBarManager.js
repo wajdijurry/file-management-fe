@@ -4,6 +4,9 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
     progressBars: {},
     queueWindow: null,
     fileQueueStore: null,
+    operationsPopover: null,
+    progressButton: null,
+    activeOperationId: null,
 
     constructor: function() {
         this.callParent(arguments);
@@ -15,122 +18,146 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
         });
     },
 
-    createQueueWindow: function() {
-        if (this.queueWindow) {
-            return this.queueWindow;
+    init: function() {
+        // Initialize file queue store
+        this.fileQueueStore = Ext.create('Ext.data.Store', {
+            fields: ['fileName', 'status', 'progressId'],
+            data: []
+        });
+
+        // Create operations popover
+        this.operationsPopover = Ext.create('Ext.panel.Panel', {
+            floating: true,
+            hidden: true,
+            shadow: true,
+            width: 400,
+            maxHeight: 300,
+            minHeight: 50,
+            autoScroll: true,
+            cls: 'operations-popover',
+            layout: {
+                type: 'vbox',
+                align: 'stretch'
+            },
+            style: {
+                zIndex: 999999 // Ensure popover stays on top
+            },
+            bodyStyle: {
+                background: '#fff',
+                padding: '5px'
+            },
+            items: [],
+            listeners: {
+                hide: function() {
+                    const btn = FileManagement.components.utils.ProgressBarManager.progressButton;
+                    if (btn) {
+                        btn.removeCls('active');
+                    }
+                }
+            }
+        });
+    },
+
+    createProgressButton: function() {
+        if (this.progressButton) {
+            return this.progressButton;
         }
 
-        this.queueWindow = Ext.create('Ext.window.Window', {
-            title: 'File Queue',
-            layout: 'fit',
-            width: 400,
-            height: 300,
-            closeAction: 'hide', // Hide instead of destroy
-            items: [
-                Ext.create('Ext.grid.Panel', {
-                    store: this.fileQueueStore,
-                    columns: [
-                        { text: 'File Name', dataIndex: 'fileName', flex: 1 },
-                        {
-                            text: 'Status',
-                            dataIndex: 'status',
-                            width: 150,
-                            renderer: function (value) {
-                                let iconHtml = '';
-                                if (value === 'Uploaded' || value === 'Moved' || value === 'Downloaded') {
-                                    iconHtml = '<span style="color:green; margin-right:5px;" class="fa fa-check-circle"></span>';
-                                } else if (value === 'Failed') {
-                                    iconHtml = '<span style="color:red; margin-right:5px;" class="fa fa-times-circle"></span>';
-                                } else if (value === 'Queued') {
-                                    iconHtml = '<span style="color:blue; margin-right:5px;" class="fa fa-clock"></span>';
-                                }
-                                return `${iconHtml}${value}`;
-                            }
-                        }
-                    ]
-                })
-            ],
-            listeners: {
-                hide: function () {
-                    // Reset toggle state of all queue buttons when window is hidden
-                    Ext.ComponentQuery.query('button[toggleGroup^=progress-]').forEach(button => {
-                        button.toggle(false);
-                    });
+        const userToolbar = Ext.getCmp('userToolbar');
+        this.progressButton = userToolbar.down('#progressBar').add({
+            xtype: 'button',
+            itemId: 'operationsButton',
+            hidden: true,
+            html: '<div class="circular-progress"><span class="percentage">0%</span></div>',
+            handler: function(btn) {
+                const popover = FileManagement.components.utils.ProgressBarManager.operationsPopover;
+                if (popover.isVisible()) {
+                    popover.hide();
+                    btn.removeCls('active');
+                } else {
+                    btn.addCls('active');
+                    popover.showBy(btn, 'tl-bl?', [0, -5]);
                 }
             }
         });
 
-        return this.queueWindow;
+        return this.progressButton;
     },
 
-    addProgressBar: function (id, text, files = [], cancelCallback = null, showQueueButton = true) {
-        const userToolbar = Ext.getCmp('userToolbar');
+    addProgressBar: function(id, files) {
         if (this.progressBars[id]) {
             console.warn(`Progress bar with ID "${id}" already exists.`);
             return;
         }
 
-        // Add files to the shared store with their progress ID
-        if (files && files.length > 0) {
-            const newFiles = files.map(file => ({
-                ...file,
-                progressId: id
-            }));
+        // Add files to queue store
+        const newFiles = files.map(file => ({
+            fileName: file.name,
+            status: 'queued',
+            progressId: id
+        }));
+        if (newFiles.length > 0) {
             this.fileQueueStore.add(newFiles);
         }
 
-        // Create or get the queue window
-        const queueWindow = this.createQueueWindow();
-
-        // Add the progress bar to the toolbar
-        const progressBarContainer = userToolbar.down('#progressBar').add({
+        const progressContainer = {
             xtype: 'container',
             layout: 'hbox',
-            items: [
-                {
-                    xtype: 'button',
-                    text: 'Queue',
-                    margin: '0 5 0 5',
-                    iconCls: 'fa fa-clock',
-                    hidden: !showQueueButton,
-                    enableToggle: true,
-                    toggleGroup: id, // Use the unique ID directly as the toggle group
-                    toggleHandler: function (button, pressed) {
-                        if (pressed) {
-                            queueWindow.show();
-                        }
-                    }
-                },
-                {
-                    xtype: 'button',
-                    text: 'Cancel',
-                    margin: '0 5 0 5',
-                    iconCls: 'fa fa-ban',
-                    listeners: {
-                        click: function () {
-                            console.log('Cancel button pressed');
-                            if (typeof cancelCallback === 'function') {
-                                cancelCallback(id);
-                            }
-                            FileManagement.components.utils.ProgressBarManager.removeProgressBar(id);
-                        }
-                    }
-                },
-                {
-                    xtype: 'progressbar',
-                    text: text,
-                    width: 300,
-                    value: 0,
-                    margin: '0 5 0 5',
-                    textTpl: '{text} ({percent:number("0")}%)'
+            margin: '0 0 4 0',
+            items: [{
+                xtype: 'progressbar',
+                text: files[0].name + ' (0%)',
+                flex: 1,
+                value: 0
+            }, {
+                xtype: 'button',
+                iconCls: 'fa fa-ban',
+                margin: '0 0 0 5',
+                handler: function() {
+                    FileManagement.components.utils.SocketManager.cancelOperation(id);
                 }
-            ]
-        });
+            }]
+        };
+
+        // Add to popover
+        const popoverItem = this.operationsPopover.add(progressContainer);
 
         this.progressBars[id] = {
-            container: progressBarContainer,
-            files: files
+            container: popoverItem,
+            files: files,
+            progress: 0
         };
+
+        // Show progress button if hidden
+        if (this.progressButton.isHidden()) {
+            this.progressButton.show();
+        }
+
+        return popoverItem;
+    },
+
+    removeProgressBar: function(id) {
+        const progressBar = this.progressBars[id];
+        if (!progressBar) {
+            console.warn(`Progress bar with ID "${id}" does not exist.`);
+            return;
+        }
+
+        // Remove files from queue store
+        const filesToRemove = this.fileQueueStore.queryBy(record => record.get('progressId') === id);
+        if (filesToRemove.length > 0) {
+            this.fileQueueStore.remove(filesToRemove.items);
+        }
+
+        // Remove from popover
+        this.operationsPopover.remove(progressBar.container, true);
+        delete this.progressBars[id];
+
+        // Hide progress button if no more progress bars
+        if (Object.keys(this.progressBars).length === 0) {
+            this.progressButton.hide();
+            this.operationsPopover.hide();
+        }
     },
 
     updateQueuedStatus: function(id, fileName, status) {
@@ -142,25 +169,6 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
         }
     },
 
-    removeProgressBar: function(id) {
-        const progressBar = this.progressBars[id];
-        if (progressBar) {
-            // Remove files for this progress bar from the store
-            const filesToRemove = this.fileQueueStore.queryBy(record => record.get('progressId') === id);
-            this.fileQueueStore.remove(filesToRemove.items);
-
-            // Remove the progress bar UI
-            const userToolbar = Ext.getCmp('userToolbar');
-            if (userToolbar) {
-                const progressBarContainer = userToolbar.down('#progressBar');
-                if (progressBarContainer) {
-                    progressBarContainer.remove(progressBar.container, true);
-                }
-            }
-            delete this.progressBars[id];
-        }
-    },
-
     updateProgress: function(id, progress, text) {
         let progressBar = this.progressBars[id];
         if (!progressBar) {
@@ -169,30 +177,37 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
         }
 
         const progressBarComponent = progressBar.container.down('progressbar');
-        progressBarComponent.show();
         const percentage = Math.round(progress);
+        progressBar.progress = progress;
+        progressBar.text = text;
+        
         progressBarComponent.updateProgress(
             progress / 100, 
             text ? `${text} (${percentage}%)` : `${percentage}%`,
-            true  // animate
+            true
         );
 
+        // Update circular progress if this is the active operation
+        if (id === this.activeOperationId) {
+            this.updateCircularProgress(percentage);
+        }
+
         if (progress >= 100) {
-            progressBarComponent.hide();
+            this.removeProgressBar(id);
         }
     },
 
-    getTruncatedTextWithProgress: function (text, progress, maxWidth) {
-        // Use a canvas to measure text width and truncate as necessary
-        const canvas = document.createElement('canvas');
-        const context = canvas.getContext('2d');
-        context.font = '12px Arial'; // Match the font used in the progress bar
-        let truncatedText = `${text} (${progress}%)`;
-
-        while (context.measureText(truncatedText).width > maxWidth) {
-            truncatedText = truncatedText.slice(0, -5) + '... (' + progress + '%)';
+    updateCircularProgress: function(percentage) {
+        if (this.progressButton) {
+            const progressEl = this.progressButton.el.down('.circular-progress');
+            if (progressEl) {
+                // Update the progress text
+                progressEl.update(`<span class="percentage">${percentage}%</span>`);
+                
+                // Update the CSS variable for the conic gradient
+                const degrees = (percentage / 100) * 360;
+                progressEl.dom.style.setProperty('--progress', `${degrees}deg`);
+            }
         }
-
-        return truncatedText;
     }
 });
