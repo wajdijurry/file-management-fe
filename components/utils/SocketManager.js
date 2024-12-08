@@ -98,6 +98,29 @@ Ext.define('FileManagement.components.utils.SocketManager', {
                     icon: Ext.Msg.WARNING
                 });
             });
+
+            this.initCancellationListeners();
         }
+    },
+
+    cancelOperation: function(jobId) {
+        if (this.socket) {
+            this.socket.emit('cancelOperation', { jobId });
+            // Remove progress bar immediately for better UX
+            FileManagement.components.utils.ProgressBarManager.removeProgressBar(jobId);
+        }
+    },
+
+    // Listen for operation cancellation response
+    initCancellationListeners: function() {
+        this.socket.on('operationCancelled', (data) => {
+            console.log('Operation cancelled:', data.jobId);
+            // Progress bar already removed in cancelOperation
+        });
+
+        this.socket.on('operationCancelError', (data) => {
+            console.error('Failed to cancel operation:', data.jobId, data.error);
+            // Could show an error message to user here if needed
+        });
     }
 });

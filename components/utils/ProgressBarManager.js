@@ -32,7 +32,7 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
             shadow: true,
             width: 400,
             maxHeight: 300,
-            minHeight: 50,
+            minHeight: 30,
             autoScroll: true,
             cls: 'operations-popover',
             layout: {
@@ -56,13 +56,8 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
                 }
             }
         });
-    },
 
-    createProgressButton: function() {
-        if (this.progressButton) {
-            return this.progressButton;
-        }
-
+        // Create progress button
         const userToolbar = Ext.getCmp('userToolbar');
         this.progressButton = userToolbar.down('#progressBar').add({
             xtype: 'button',
@@ -84,19 +79,24 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
         return this.progressButton;
     },
 
-    addProgressBar: function(id, files) {
+    addProgressBar: function(id, text, files = [], cancelCallback = null) {
         if (this.progressBars[id]) {
             console.warn(`Progress bar with ID "${id}" already exists.`);
             return;
         }
 
+        // Create popover if it doesn't exist
+        if (!this.operationsPopover) {
+            this.init();
+        }
+
         // Add files to queue store
-        const newFiles = files.map(file => ({
-            fileName: file.name,
-            status: 'queued',
-            progressId: id
-        }));
-        if (newFiles.length > 0) {
+        if (files && files.length > 0) {
+            const newFiles = files.map(file => ({
+                fileName: file.name,
+                status: 'queued',
+                progressId: id
+            }));
             this.fileQueueStore.add(newFiles);
         }
 
@@ -106,7 +106,7 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
             margin: '0 0 4 0',
             items: [{
                 xtype: 'progressbar',
-                text: files[0].name + ' (0%)',
+                text: text + ' (0%)',
                 flex: 1,
                 value: 0
             }, {
@@ -114,7 +114,28 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
                 iconCls: 'fa fa-ban',
                 margin: '0 0 0 5',
                 handler: function() {
-                    FileManagement.components.utils.SocketManager.cancelOperation(id);
+                    // Extract the actual job ID from the progress bar ID
+                    // Progress bar ID format: "compression-[timestamp]-[random]"
+                    if (id.startsWith('compression-')) {
+                        // Cancel via socket
+                        FileManagement.components.utils.SocketManager.cancelOperation(id);
+                        
+                        // Also cancel via API
+                        Ext.Ajax.request({
+                            url: 'http://localhost:5000/api/files/stop-compression',
+                            method: 'POST',
+                            jsonData: { jobId: id },
+                            success: function(response) {
+                                const result = Ext.decode(response.responseText);
+                                console.log('Compression cancelled via API:', result);
+                            },
+                            failure: function(response) {
+                                console.error('Failed to cancel compression via API:', response);
+                            }
+                        });
+                    } else {
+                        console.warn('Not a compression job:', id);
+                    }
                 }
             }]
         };
@@ -138,6 +159,7 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
 
     removeProgressBar: function(id) {
         const progressBar = this.progressBars[id];
+
         if (!progressBar) {
             console.warn(`Progress bar with ID "${id}" does not exist.`);
             return;
@@ -160,6 +182,21 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
         }
     },
 
+    cancelRelatedProgressBars: function(files) {
+        const progressBarsToRemove = [];
+        
+        // Find all progress bars that contain any of the files
+        Object.entries(this.progressBars).forEach(([id, progressBar]) => {
+            if (progressBar.files && progressBar.files.some(file => 
+                files.some(f => f.name === file.name))) {
+                progressBarsToRemove.push(id);
+            }
+        });
+
+        // Remove all related progress bars
+        progressBarsToRemove.forEach(id => this.removeProgressBar(id));
+    },
+
     updateQueuedStatus: function(id, fileName, status) {
         // Update status in the shared store
         const record = this.fileQueueStore.findRecord('fileName', fileName);
@@ -169,45 +206,35 @@ Ext.define('FileManagement.components.utils.ProgressBarManager', {
         }
     },
 
-    updateProgress: function(id, progress, text) {
-        let progressBar = this.progressBars[id];
+    updateProgress: function(id, progress) {
+        const progressBar = this.progressBars[id];
         if (!progressBar) {
             console.warn(`Progress bar with ID "${id}" does not exist.`);
             return;
         }
 
-        const progressBarComponent = progressBar.container.down('progressbar');
-        const percentage = Math.round(progress);
-        progressBar.progress = progress;
-        progressBar.text = text;
-        
-        progressBarComponent.updateProgress(
-            progress / 100, 
-            text ? `${text} (${percentage}%)` : `${percentage}%`,
-            true
-        );
-
-        // Update circular progress if this is the active operation
-        if (id === this.activeOperationId) {
-            this.updateCircularProgress(percentage);
+        // Update progress bar
+        const progressComponent = progressBar.container.items.getAt(0);
+        if (progressComponent) {
+            progressComponent.updateProgress(
+                progress / 100,
+                progressComponent.text.replace(/\(\d+%\)/, `(${Math.round(progress)}%)`)
+            );
         }
 
-        if (progress >= 100) {
-            this.removeProgressBar(id);
-        }
-    },
-
-    updateCircularProgress: function(percentage) {
-        if (this.progressButton) {
-            const progressEl = this.progressButton.el.down('.circular-progress');
-            if (progressEl) {
-                // Update the progress text
-                progressEl.update(`<span class="percentage">${percentage}%</span>`);
-                
-                // Update the CSS variable for the conic gradient
-                const degrees = (percentage / 100) * 360;
-                progressEl.dom.style.setProperty('--progress', `${degrees}deg`);
+        // Update circular progress in button
+        const circularProgress = this.progressButton.el.down('.circular-progress');
+        if (circularProgress) {
+            circularProgress.setStyle({
+                background: `conic-gradient(#4169E1 ${progress * 3.6}deg, #E8EBF4 0deg)`
+            });
+            const percentageEl = circularProgress.down('.percentage');
+            if (percentageEl) {
+                percentageEl.setHtml(`${Math.round(progress)}%`);
             }
         }
+
+        // Store progress
+        progressBar.progress = progress;
     }
 });

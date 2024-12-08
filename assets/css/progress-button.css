@@ -8,32 +8,24 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: background 0.3s ease;
 }
 
 .circular-progress::before {
     content: '';
     position: absolute;
-    width: 18px;
-    height: 18px;
-    background: -webkit-linear-gradient(top, #dfe9f5, #d3e1f1);
+    width: 14px;
+    height: 14px;
+    background: #fff;
     border-radius: 50%;
     z-index: 1;
-    left: 50%;
-    top: 50%;
-    transform: translate(-50%, -50%);
 }
 
 .percentage {
-    padding: 1px;
     position: relative;
     z-index: 2;
     font-size: 9px;
     font-weight: 500;
     color: #333;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    line-height: 1;
-    text-align: center;
 }
 
 .operations-popover {
