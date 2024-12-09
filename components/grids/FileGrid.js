@@ -934,7 +934,7 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         listeners: {
             drop: function(node, data, overModel, dropPosition, eOpts) {
                 // Check if the target is a folder
-                // if (overModel.get('isFolder')) {
+                if (overModel.get('isFolder') || overModel.get('mimetype').includes('zip')) {
                     const draggedRecords = data.records;
                     const targetId = overModel.get('id');
 
@@ -946,9 +946,9 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     console.log(overModel);
 
                     this.up('filegrid').moveItem(draggedRecords, overModel);
-                // } else {
-                //     Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder.');
-                // }
+                } else {
+                    Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder or archives.');
+                }
             }
         }
     },
