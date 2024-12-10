@@ -2,9 +2,16 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
     extend: 'Ext.panel.Panel',
     xtype: 'zipviewer',
 
+    requires: [
+        'FileManagement.components.utils.PanelUtils',
+        'FileManagement.components.utils.DecompressionUtil',
+        'FileManagement.components.dialogs.ExtractionDialog'
+    ],
+
     config: {
         src: null,
-        fileName: null
+        fileName: null,
+        filePath: null
     },
 
     title: 'Zip File Contents',
@@ -116,6 +123,30 @@ Ext.define('FileManagement.components.viewers.ZipViewer', {
                                 store.filterBy(record => record.get('name').toLowerCase().includes(newValue.toLowerCase()));
                             }
                         }
+                    }
+                },
+                {
+                    xtype: 'tbseparator'
+                },
+                {
+                    text: 'Extract',
+                    iconCls: 'fa-duotone fa-solid fa-file-zipper',
+                    handler: function() {
+                        const gridPanel = this.up('gridpanel');
+                        const zipViewer = this.up('zipviewer');
+                        
+                        Ext.create('FileManagement.components.dialogs.ExtractionDialog', {
+                            file: {
+                                get: function(field) {
+                                    if (field === 'path') {
+                                        return zipViewer.getFilePath();
+                                    }
+                                }
+                            },
+                            onSuccess: function() {
+                                zipViewer.loadZipContents();
+                            }
+                        }).show();
                     }
                 }
             ],

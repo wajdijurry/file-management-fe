@@ -28,6 +28,9 @@ Ext.define('FileManagement.components.stores.FolderTreeStore', {
     defaultRootId: null, // Match the root ID for consistency with the backend
     autoLoad: true, // Explicitly control data loading
     lazyFill: true, // Load children on demand
+
+    
+
     listeners: {
         beforeload: function (store, operation) {
             const node = operation.node;
@@ -41,5 +44,5 @@ Ext.define('FileManagement.components.stores.FolderTreeStore', {
                 console.error('Failed to load tree data');
             }
         }
-    }
+    },
 });

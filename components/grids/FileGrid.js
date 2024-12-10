@@ -6,7 +6,8 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         'FileManagement.components.utils.FileGridUtils',
         'FileManagement.components.actions.FileGridActions',
         'FileManagement.components.utils.PasswordPromptUtil',
-        'FileManagement.components.utils.AccessTracker'
+        'FileManagement.components.utils.AccessTracker',
+        'FileManagement.components.utils.DecompressionUtil'
     ],
 
     title: 'Files Explorer',
@@ -62,8 +63,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
             // Perform any additional cleanup needed
             FileManagement.components.utils.PanelUtils.destroy(panel);
-
-            console.log('FileGrid and associated elements cleaned up successfully.');
         },
         afterrender: function (panel) {
             // Ensure absolute positioning for free dragging
@@ -139,6 +138,18 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         xtype: 'toolbar',
         enableOverflow: true,
         items: [
+            {
+                text: 'Share',
+                iconCls: 'fa fa-duotone fa-solid fa-share-nodes',
+                id: 'shareItemButton',
+                disabled: true,
+                handler: function () {
+                    // do nothing for now
+                }
+            },
+            {
+                xtype: 'tbseparator'
+            },
             {
                 text: 'Move Selected',
                 iconCls: 'fa fa-arrows-alt',
@@ -295,6 +306,19 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 }
             },
             {
+                text: 'Go Up',
+                iconCls: 'fa fa-level-up',
+                itemId: 'goUpButton',
+                disabled: true,
+                handler: function() {
+                    const grid = this.up('grid');
+                    grid.navigateUp();
+                }
+            },
+            {
+                xtype: 'tbseparator'
+            },
+            {
                 text: 'Reload',
                 iconCls: 'fa fa-refresh',
                 handler: function() {
@@ -311,16 +335,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 },
                 disabled: true,
                 itemId: 'deleteButton'
-            },
-            {
-                text: 'Go Up',
-                iconCls: 'fa fa-level-up',
-                itemId: 'goUpButton',
-                disabled: true,
-                handler: function() {
-                    const grid = this.up('grid');
-                    grid.navigateUp();
-                }
             },
             {
                 text: 'Upload',
@@ -564,33 +578,14 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
                                     if (zipFile && zipFile.get('mimetype') === 'application/zip') {
                                         const proceedWithDecompress = () => {
-                                            // Show a prompt dialog to ask for folder name
-                                            Ext.Msg.prompt('Decompress Folder', 'Enter the name of the folder to decompress into:', function(btn, folderName) {
-                                                if (btn === 'ok' && folderName) {
-                                                    // Proceed with decompress request using the specified folder name
-                                                    Ext.Ajax.request({
-                                                        url: 'http://localhost:5000/api/files/decompress',
-                                                        method: 'POST',
-                                                        headers: {
-                                                            'Authorization': `Bearer ${token}`,
-                                                            'Content-Type': 'application/json'
-                                                        },
-                                                        jsonData: {
-                                                            filePath: zipFile.get('path'),
-                                                            targetFolder: this.currentFolder ? this.currentFolder + '/' + folderName : folderName,
-                                                            parentId: this.currentFolderId
-                                                        },
-                                                        success: function(response) {
-                                                            Ext.Msg.alert('Success', 'File decompressed successfully.');
-                                                            grid.getStore().reload();
-                                                        },
-                                                        failure: function(response) {
-                                                            let responseJSON = JSON.parse(response.responseText);
-                                                            Ext.Msg.alert('Error', 'Failed to decompress file: ' + responseJSON.error);
-                                                        }
-                                                    });
+                                            FileManagement.components.utils.DecompressionUtil.showDecompressDialog({
+                                                file: zipFile,
+                                                currentFolder: this.currentFolder,
+                                                parentId: this.currentFolderId,
+                                                onSuccess: function() {
+                                                    grid.getStore().reload();
                                                 }
-                                            }, this);
+                                            });
                                         };
 
                                         // Check if archive is password protected
@@ -680,6 +675,10 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                         itemId: 'breadcrumbToolbar',
                         border: 0,
                         items: [],
+                        scrollable: {
+                            x:true,
+                            y:false
+                        }
                     }
                 ]
             }
@@ -724,7 +723,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
 
     // Handler for "View" option (for files)
     onViewFile: function(record) {
-        console.log(record);
         FileManagement.components.actions.FileGridActions.onViewFile(this, record);
     },
 
@@ -942,8 +940,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                     // draggedRecords.forEach(record => {
                     //     this.up('filegrid').moveItem(record, targetFolderId);
                     // });
-
-                    console.log(overModel);
 
                     this.up('filegrid').moveItem(draggedRecords, overModel);
                 } else {

@@ -61,6 +61,17 @@ Ext.define('FileManagement.components.viewers.TextViewer', {
         }
     ],
 
+    tbar: [
+        {
+            text: 'Beautify JSON',
+            iconCls: 'fa fa-indent',
+            handler: function (btn) {
+                const viewer = btn.up('textviewer');
+                viewer.beautifyJsonContent();
+            }
+        }
+    ],
+
     listeners: {
         afterrender: function (panel) {
             // Ensure absolute positioning for free dragging
@@ -75,8 +86,10 @@ Ext.define('FileManagement.components.viewers.TextViewer', {
         // Define items with the htmleditor for text editing
         this.items = [{
             xtype: 'htmleditor',
-            enableFont: false, // Keep plain text editing
+            enableFont: true, // Keep plain text editing
             enableSourceEdit: true, // Allow toggling between HTML source and view
+            enableColors: true,
+            enableAlignments: true,
             value: 'Loading...', // Temporary placeholder text
             style: 'width: 100%; height: 100%;',
             margin: '10'
@@ -151,6 +164,22 @@ Ext.define('FileManagement.components.viewers.TextViewer', {
             Ext.Msg.alert('Success', 'File saved successfully!');
         } catch (error) {
             Ext.Msg.alert('Error', 'Failed to save the text file: ' + error.message);
+        }
+    },
+
+    beautifyJsonContent: function () {
+        const htmlEditor = this.down('htmleditor');
+        const content = htmlEditor ? htmlEditor.getValue() : '';
+
+        console.log(htmlEditor);
+
+        try {
+            const json = JSON.parse(content);
+            const beautifiedJson = JSON.stringify(json, null, 4); // Pretty print JSON
+            htmlEditor.setValue(beautifiedJson);
+            Ext.Msg.alert('Success', 'JSON content has been beautified.');
+        } catch (error) {
+            Ext.Msg.alert('Error', 'Invalid JSON: ' + error.message);
         }
     }
 });

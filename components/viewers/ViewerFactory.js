@@ -39,6 +39,7 @@ Ext.define('FileManagement.components.viewers.ViewerFactory', {
             viewer = Ext.create('FileManagement.components.viewers.ZipViewer', {
                 src: fileUrl,
                 fileName: fileName,
+                filePath: record.get('path'),
                 title: `Zip File Contents: ${fileName}`
             });
         } else if (fileType.startsWith('video/')) {

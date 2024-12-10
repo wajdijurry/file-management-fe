@@ -81,4 +81,20 @@
     background-color: #888; /* Darker color on hover */
 }
 
+.drag-drop-zone {
+    border: 2px dashed #ccc;
+    text-align: center;
+    color: #555;
+    padding: 20px;
+}
+
+.drag-over {
+    border-color: #0a74da;
+    background: #f0f8ff;
+}
+
+.drop-zone-text {
+    font-size: 16px;
+    font-weight: bold;
+}
 

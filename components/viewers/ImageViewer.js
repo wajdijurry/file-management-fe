@@ -100,6 +100,8 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
                                 return;
                             }
 
+                            viewer.mask(`Converting to "${targetFormat}"...`);
+
                             Ext.Ajax.request({
                                 url: 'http://localhost:5000/api/image/convert-image',
                                 method: 'POST',
@@ -119,6 +121,7 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
                                 },
                                 callback: function () {
                                     grid.getStore().reload();
+                                    viewer.unmask();
                                 }
                             });
                         }
