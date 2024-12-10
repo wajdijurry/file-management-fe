@@ -13,7 +13,7 @@ Ext.define('FileManagement.components.actions.FileGridActions', {
 
         Ext.Msg.confirm('Delete Files', 'Are you sure you want to delete the selected files?', function(btn) {
             if (btn === 'yes') {
-                const token = localStorage.getItem('token');
+                const token = FileManagement.helpers.Functions.getToken();
                 const fileIds = selectedRecords.map(record => record.get('id'));
 
                 Ext.Ajax.request({
@@ -41,7 +41,7 @@ Ext.define('FileManagement.components.actions.FileGridActions', {
 
         Ext.Msg.prompt('Rename', 'Enter new name:', function(btn, text) {
             if (btn === 'ok' && text) {
-                const token = localStorage.getItem('token');
+                const token = FileManagement.helpers.Functions.getToken();
                 
                 Ext.Ajax.request({
                     url: 'http://localhost:5000/api/files/rename',

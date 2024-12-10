@@ -60,6 +60,74 @@ Ext.define('FileManagement.components.viewers.ImageViewer', {
         }
     ],
 
+    tbar: [
+        {
+            text: 'Convert',
+            iconCls: 'fa fa-exchange-alt',
+            menu: {
+                xtype: 'menu',
+                items: [
+                    {
+                        xtype: 'combobox',
+                        fieldLabel: 'Target Format',
+                        itemId: 'targetFormat',
+                        store: ['PNG', 'JPG', 'WEBP', 'AVIF'],
+                        editable: false,
+                        width: 150
+                    },
+                    {
+                        xtype: 'sliderfield',
+                        fieldLabel: 'Quality (%)',
+                        itemId: 'qualitySlider',
+                        minValue: 1,
+                        maxValue: 100,
+                        value: 100,
+                        increment: 1,
+                        width: 300
+                    },
+                    {
+                        text: 'Convert',
+                        iconCls: 'fa fa-check',
+                        handler: function () {
+                            const token = FileManagement.helpers.Functions.getToken();
+                            const viewer = this.up('imageviewer');
+                            const targetFormat = viewer.down('#targetFormat')?.getValue();
+                            const quality = viewer.down('#qualitySlider')?.getValue();
+                            const grid = Ext.ComponentQuery.query('filegrid')[0];
+
+                            if (!targetFormat) {
+                                Ext.Msg.alert('Error', 'Please select a target format.');
+                                return;
+                            }
+
+                            Ext.Ajax.request({
+                                url: 'http://localhost:5000/api/image/convert-image',
+                                method: 'POST',
+                                headers: {
+                                    'Authorization': `Bearer ${token}`
+                                },
+                                jsonData: {
+                                    fileId: viewer.fileId,
+                                    targetFormat: targetFormat,
+                                    quality: quality
+                                },
+                                success: function () {
+                                    Ext.Msg.alert('Success', 'Image converted successfully.');
+                                },
+                                failure: function () {
+                                    Ext.Msg.alert('Error', 'Failed to convert the image.');
+                                },
+                                callback: function () {
+                                    grid.getStore().reload();
+                                }
+                            });
+                        }
+                    }
+                ]
+            }
+        }
+    ],
+
     listeners: {
         afterrender: function (panel) {
             // Ensure absolute positioning for free dragging

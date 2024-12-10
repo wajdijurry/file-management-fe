@@ -7,7 +7,7 @@ Ext.define('FileManagement.components.utils.SocketManager', {
      * Initialize the WebSocket connection and event listeners.
      */
     initSocket: function() {
-        const token = localStorage.getItem('token');
+        const token = FileManagement.helpers.Functions.getToken();
         const userId = localStorage.getItem('userId'); // Make sure you store userId during login
 
         if (!this.socket) {
@@ -56,6 +56,8 @@ Ext.define('FileManagement.components.utils.SocketManager', {
                     buttons: Ext.Msg.OK,
                     icon: Ext.Msg.ERROR
                 });
+
+                hideProgressBar();
             });
 
             // Listen for download progress
