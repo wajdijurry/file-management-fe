@@ -83,13 +83,58 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
         },
         { name: 'name', type: 'string' },
         {
-            name: 'size',
-            type: 'int',
+            name: 'type',
+            type: 'string',
             convert: function(value, record) {
-                if (value < 1024) return `${value} Bytes`;
-                else if (value < 1024 * 1024) return `${(value / 1024).toFixed(2)} KB`;
-                else if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MB`;
-                return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+                if (record.get('isFolder')) return 'Folder';
+                const mimetype = record.get('mimetype') || '';
+                if (!mimetype) return 'Unknown';
+                
+                // Common file types
+                switch (mimetype) {
+                    case 'application/pdf':
+                        return 'PDF';
+                    case 'application/zip':
+                        return 'ZIP';
+                    case 'application/x-7z-compressed':
+                        return '7Z';
+                    case 'application/x-tar':
+                    case 'application/gzip':
+                        return 'Archive';
+                    case 'application/vnd.openxmlformats-officedocument.wordprocessingml.document':
+                    case 'application/msword':
+                        return 'Word';
+                    case 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':
+                    case 'application/vnd.ms-excel':
+                        return 'Excel';
+                    case 'application/vnd.openxmlformats-officedocument.presentationml.presentation':
+                    case 'application/vnd.ms-powerpoint':
+                        return 'PowerPoint';
+                    case 'text/plain':
+                        return 'Text';
+                    default:
+                        // Handle image types
+                        if (mimetype.startsWith('image/')) {
+                            return mimetype.split('/')[1].toUpperCase();
+                        }
+                        // Handle video types
+                        if (mimetype.startsWith('video/')) {
+                            return 'Video';
+                        }
+                        // Handle audio types
+                        if (mimetype.startsWith('audio/')) {
+                            return 'Audio';
+                        }
+                        return mimetype.split('/')[1] || 'Unknown';
+                }
+            }
+        },
+        {
+            name: 'size',
+            type: 'number',
+            sortType: 'asInt',
+            convert: function(value) {
+                return parseInt(value, 10) || 0;
             }
         },
         {

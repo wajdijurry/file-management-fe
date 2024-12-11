@@ -8,6 +8,7 @@ Ext.Loader.setPath({
     'FileManagement.components.models': './components/models',
     'FileManagement.components.actions': './components/actions',
     'FileManagement.components.dialogs': './components/dialogs',
+    'FileManagement.components.search': './components/search',
     'FileManagement.helpers': './helpers',
 });
 
@@ -28,6 +29,7 @@ Ext.application({
         'FileManagement.components.utils.SocketManager',
         'FileManagement.components.utils.ProgressBarManager',
         'FileManagement.components.utils.SnapAssist',
+        'FileManagement.components.utils.KeyboardShortcuts',
     ],
 
     launch: function() {
@@ -163,7 +165,12 @@ Ext.application({
                 loginForm.setVisible(true);
             });
         } else {
-            loadMainView();
+            Ext.onReady(function() {
+                // Initialize keyboard shortcuts
+                FileManagement.components.utils.KeyboardShortcuts.init();
+
+                loadMainView();
+            });
         }
     }
 });

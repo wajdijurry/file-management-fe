@@ -141,7 +141,8 @@ Ext.define('FileManagement.components.navigation.UserToolbar', {
                                     store: {
                                         fields: ['shortcut', 'description'],
                                         data: [
-                                            { shortcut: 'Alt+Q', description: 'Switch between panels' }
+                                            { shortcut: 'Alt+Q', description: 'Switch between panels' },
+                                            { shortcut: 'Alt+G', description: 'Quick search files and folders' }
                                         ]
                                     }
                                 }

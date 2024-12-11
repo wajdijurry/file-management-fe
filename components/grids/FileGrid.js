@@ -117,7 +117,25 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 return `<i class="${iconCls}" style="margin-right: 5px;"></i> ${Ext.String.htmlEncode(value)}`;
             }
         },
-        { text: 'Size', dataIndex: 'size', flex: 1 },
+        {
+            text: 'Type',
+            dataIndex: 'type',
+            width: 100,
+            renderer: function(value) {
+                return value || 'Unknown';
+            }
+        },
+        { 
+            text: 'Size', 
+            dataIndex: 'size', 
+            flex: 1,
+            renderer: function(value) {
+                if (value < 1024) return `${value} Bytes`;
+                else if (value < 1024 * 1024) return `${(value / 1024).toFixed(2)} KB`;
+                else if (value < 1024 * 1024 * 1024) return `${(value / (1024 * 1024)).toFixed(2)} MB`;
+                return `${(value / (1024 * 1024 * 1024)).toFixed(2)} GB`;
+            }
+        },
         {
             text: 'Upload Date',
             dataIndex: 'createdAt',
