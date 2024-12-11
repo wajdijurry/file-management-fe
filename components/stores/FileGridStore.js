@@ -3,14 +3,20 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
     extend: 'Ext.data.Store',
     autoLoad: true, // Automatically load the store on initialization
     xtype: "fileGridStore",
+    groupField: 'parentPath',
     proxy: {
         type: 'ajax',
-        url: 'http://localhost:5000/api/files?parent_id=', // API endpoint to fetch files
+        url: 'http://localhost:5000/api/files',
         reader: {
             type: 'json',
-            rootProperty: 'files', // API response structure
-            idProperty: 'id' // Use MongoDB's id as the record identifier
-        }
+            rootProperty: 'files',
+            idProperty: 'id'
+        },
+        extraParams: {
+            parent_id: ''
+        },
+        appendId: false, // Ensure parameters are properly handled
+        simpleSortMode: true // Enable simple sort mode for proper parameter handling
     },
 
     listeners: {
@@ -32,6 +38,8 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
     fields: [
         { name: 'id', type: 'string' }, // MongoDB ID field
         { name: 'mimetype', type: 'string' },
+        { name: 'name', type: 'string' },
+        { name: 'path', type: 'string' },
         {
             name: 'icon',
             type: 'string',
@@ -81,7 +89,6 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
                 return iconClass;
             }
         },
-        { name: 'name', type: 'string' },
         {
             name: 'type',
             type: 'string',
@@ -143,8 +150,34 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
         },
         { name: 'isFolder', type: 'boolean' },
         { name: 'isLocked', type: 'boolean' },
-        { name: 'hasChildren', type: 'boolean' }
+        { name: 'hasChildren', type: 'boolean' },
+        { 
+            name: 'parentPath',
+            convert: function(v, record) {
+                const path = record.get('path') || '';
+                // Extract the last part of the path (after the last userId occurrence)
+                const parts = path.split('/');
+                const userIdIndex = parts.findIndex(part => /^[0-9a-f]{24}$/i.test(part));
+                
+                if (userIdIndex !== -1) {
+                    // Get only the parts after userId
+                    const relevantParts = parts.slice(userIdIndex + 1, -1);
+                    return relevantParts.length ? '/' + relevantParts.join('/') : '/';
+                }
+                return '/';
+            }
+        }
     ],
+
+    constructor: function(config) {
+        this.callParent([config]);
+
+        // Add listener to handle grouping based on search
+        this.on('beforeload', function(store, operation) {
+            const isSearching = store.getProxy().extraParams.search;
+            store.setGroupField(isSearching ? 'parentPath' : null);
+        });
+    },
 
     loadFolderContents: function(folderName, folderId, pushToPath = true) {
         // Only push the folder to currentFolderPath if explicitly allowed
@@ -152,7 +185,7 @@ Ext.define('FileManagement.components.stores.FileGridStore', {
             this.currentFolderPath.push({ name: folderName, id: folderId });
         }
 
-        this.getProxy().setUrl(`http://localhost:5000/api/files?parent_id=${folderId}`);
+        this.getProxy().setExtraParam('parent_id', folderId);
         this.load({
             callback: function(records, operation, success) {
                 if (!success) {

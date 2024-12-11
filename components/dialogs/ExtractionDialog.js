@@ -1,5 +1,6 @@
 Ext.define('FileManagement.components.dialogs.ExtractionDialog', {
     extend: 'Ext.window.Window',
+    xtype: 'extractiondialog',
     alias: 'widget.extractiondialog',
 
     requires: [
@@ -90,14 +91,22 @@ Ext.define('FileManagement.components.dialogs.ExtractionDialog', {
         const dialog = this;
         const file = this.getFile();
         
+        dialog.mask('Extracting files... Please wait');
+        
         FileManagement.components.utils.DecompressionUtil.decompressFile({
             filePath: file.get('path'),
             parentId: folderNode.get('id') === 'root' ? null : folderNode.get('id'),
             onSuccess: function(response) {
+                dialog.unmask();
                 dialog.close();
                 if (dialog.getOnSuccess()) {
                     dialog.getOnSuccess()(response);
                 }
+            },
+            onFailure: function(response) {
+                dialog.unmask();
+                let responseJSON = JSON.parse(response.responseText);
+                Ext.Msg.alert('Error', 'Failed to decompress file: ' + responseJSON.error);
             }
         });
     }

@@ -101,6 +101,17 @@ Ext.define('FileManagement.components.utils.SocketManager', {
                 });
             });
 
+            // Listen for decompression progress
+            this.socket.on('decompressionProgress', (data) => {
+                if (data.progress) {
+                    // Find any active extraction dialogs
+                    const extractionDialog = Ext.ComponentQuery.query('extractiondialog')[0];
+                    if (extractionDialog && extractionDialog.isVisible()) {
+                        extractionDialog.mask(`Extracting Files... Please wait (${data.progress}%)`);
+                    }
+                }
+            });
+
             this.initCancellationListeners();
         }
     },

@@ -7,8 +7,14 @@ Ext.define('FileManagement.components.utils.DecompressionUtil', {
             filePath,
             parentId,
             onSuccess,
-            onFailure
+            onFailure,
+            grid
         } = config;
+
+        // Show initial loading mask
+        if (grid) {
+            grid.setLoading('Extracting Files... Please wait (0%)');
+        }
 
         Ext.Ajax.request({
             url: 'http://localhost:5000/api/files/decompress',
@@ -22,6 +28,9 @@ Ext.define('FileManagement.components.utils.DecompressionUtil', {
                 parentId: parentId
             },
             success: function(response) {
+                if (grid) {
+                    grid.setLoading(false);
+                }
                 if (onSuccess) {
                     onSuccess(response);
                 } else {
@@ -29,10 +38,18 @@ Ext.define('FileManagement.components.utils.DecompressionUtil', {
                 }
             },
             failure: function(response) {
+                if (grid) {
+                    grid.setLoading(false);
+                }
                 if (onFailure) {
                     onFailure(response);
                 } else {
-                    let responseJSON = JSON.parse(response.responseText);
+                    let responseJSON;
+                    try {
+                        responseJSON = JSON.parse(response.responseText);
+                    } catch (e) {
+                        responseJSON = { error: 'Unknown error occurred' };
+                    }
                     Ext.Msg.alert('Error', 'Failed to decompress file: ' + responseJSON.error);
                 }
             }

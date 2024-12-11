@@ -144,12 +144,49 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         }
     ],
 
-    // Optionally, you can add features like paging or filtering
+    // Add grouping feature to the grid
     features: [{
-        ftype: 'groupingsummary',
-        groupHeaderTpl: '{name}',
-        startCollapsed: true
+        ftype: 'grouping',
+        groupHeaderTpl: [
+            '{name:this.formatGroup}',
+            {
+                formatGroup: function(name) {
+                    // Remove any userId from the group name
+                    const cleanPath = name.replace(/\/[0-9a-f]{24}\/?/gi, '/');
+                    return cleanPath === '/' ? 'Root Directory' : 'Directory: ' + cleanPath;
+                }
+            }
+        ],
+        startCollapsed: false,
+        // Only show grouping when searching
+        hideGroupedHeader: true,
+        enableGroupingMenu: false
     }],
+
+    viewConfig: {
+        plugins: {
+            ptype: 'gridviewdragdrop',
+            dragText: 'Drag and drop to move'
+        },
+        listeners: {
+            drop: function(node, data, overModel, dropPosition, eOpts) {
+                // Check if the target is a folder
+                if (overModel.get('isFolder') || overModel.get('mimetype').includes('zip')) {
+                    const draggedRecords = data.records;
+                    const targetId = overModel.get('id');
+
+                    // Call the moveItem function for each dragged record
+                    // draggedRecords.forEach(record => {
+                    //     this.up('filegrid').moveItem(record, targetFolderId);
+                    // });
+
+                    this.up('filegrid').moveItem(draggedRecords, overModel);
+                } else {
+                    Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder or archives.');
+                }
+            }
+        }
+    },
 
     // Main toolbar with action buttons
     tbar: {
@@ -293,34 +330,61 @@ Ext.define('FileManagement.components.grids.FileGrid', {
                 emptyText: 'Search by name...',
                 width: 200,
                 itemId: 'searchField',
+                enableKeyEvents: true,
                 triggers: {
                     clear: {
                         cls: 'x-form-clear-trigger',
+                        weight: 1,
                         hidden: true,
                         handler: function(field) {
-                            var grid = field.up('gridpanel');
                             field.setValue('');
-                            grid.getStore().clearFilter();
+                            const grid = field.up('gridpanel');
+                            const store = grid.getStore();
+                            store.getProxy().setExtraParams({
+                                parent_id: grid.currentFolderId || ''
+                            });
+                            store.load();
+                            field.getTrigger('clear').hide();
                         }
                     }
                 },
                 listeners: {
                     change: function(field, newValue) {
-                        var grid = field.up('gridpanel');
-                        var store = grid.getStore();
-                        var clearTrigger = field.getTrigger('clear');
-                        
-                        store.clearFilter();
+                        const clearTrigger = field.getTrigger('clear');
                         if (newValue) {
-                            store.filterBy(function(record) {
-                                return record.get('name').toLowerCase().includes(newValue.toLowerCase());
-                            });
                             clearTrigger.show();
                         } else {
                             clearTrigger.hide();
                         }
                     },
-                    scope: this
+                    buffer: 300,
+                    keyup: function(field) {
+                        const value = field.getValue();
+                        const grid = field.up('gridpanel');
+                        const store = grid.getStore();
+                        
+                        if (value) {
+                            store.getProxy().setExtraParams({
+                                search: value
+                            });
+                        } else {
+                            store.getProxy().setExtraParams({
+                                parent_id: grid.currentFolderId || ''
+                            });
+                        }
+                        store.load();
+                    },
+                    specialkey: function(field, e) {
+                        if (e.getKey() === e.ESC) {
+                            field.setValue('');
+                            const grid = field.up('gridpanel');
+                            const store = grid.getStore();
+                            store.getProxy().setExtraParams({
+                                parent_id: grid.currentFolderId || ''
+                            });
+                            store.load();
+                        }
+                    }
                 }
             },
             {
@@ -908,7 +972,10 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         const store = this.getStore();
         if (!store) return;
 
-        store.getProxy().setUrl(`http://localhost:5000/api/files?parent_id=${this.currentFolderId}`);
+        store.getProxy().setExtraParams({
+            parent_id: this.currentFolderId
+        });
+        
         store.load({
             callback: function(records, operation, success) {
                 if (!success) {
@@ -942,32 +1009,6 @@ Ext.define('FileManagement.components.grids.FileGrid', {
         }
     },
 
-    viewConfig: {
-        plugins: {
-            ptype: 'gridviewdragdrop',
-            dragText: 'Drag and drop to move'
-        },
-        listeners: {
-            drop: function(node, data, overModel, dropPosition, eOpts) {
-                // Check if the target is a folder
-                if (overModel.get('isFolder') || overModel.get('mimetype').includes('zip')) {
-                    const draggedRecords = data.records;
-                    const targetId = overModel.get('id');
-
-                    // Call the moveItem function for each dragged record
-                    // draggedRecords.forEach(record => {
-                    //     this.up('filegrid').moveItem(record, targetFolderId);
-                    // });
-
-                    this.up('filegrid').moveItem(draggedRecords, overModel);
-                } else {
-                    Ext.Msg.alert('Invalid Drop', 'You can only drop items inside a folder or archives.');
-                }
-            }
-        }
-    },
-
-    // Move items handler
     moveItemsHandler: function () {
         const grid = Ext.ComponentQuery.query('filegrid')[0];
         const selected = grid.getSelectionModel().getSelection();

@@ -13,6 +13,9 @@ Ext.define('FileManagement.components.actions.FileGridActions', {
 
         Ext.Msg.confirm('Delete Files', 'Are you sure you want to delete the selected files?', function(btn) {
             if (btn === 'yes') {
+                // Show loading mask
+                grid.setLoading('Deleting files...');
+
                 const token = FileManagement.helpers.Functions.getToken();
                 const fileIds = selectedRecords.map(record => record.get('id'));
 
@@ -26,8 +29,10 @@ Ext.define('FileManagement.components.actions.FileGridActions', {
                     jsonData: { ids: fileIds },
                     success: function() {
                         grid.getStore().reload();
+                        grid.setLoading(false);
                     },
                     failure: function(response) {
+                        grid.setLoading(false);
                         Ext.Msg.alert('Error', 'Failed to delete files/folders.');
                     }
                 });
