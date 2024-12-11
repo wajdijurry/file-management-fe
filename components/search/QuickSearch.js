@@ -44,7 +44,7 @@ Ext.define('FileManagement.components.search.QuickSearch', {
             ],
             proxy: {
                 type: 'ajax',
-                url: '/api/files/search',
+                url: 'http://localhost:5000/api/files/search',
                 reader: {
                     type: 'json',
                     rootProperty: 'results'
